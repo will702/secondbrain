@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Local data & DB
+data/
+*.sqlite
+*.db
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Generated API client (regenerated from FastAPI OpenAPI)
+apps/web/src/lib/api/generated/
