@@ -1,0 +1,12 @@
+# Assignment 4 — Convolutional Neural Networks
+
+Released: September 25. Due: October 13, 23:59.
+Total points: 100.
+
+## Tasks
+1. Implement a CNN from scratch and train it on CIFAR-10.
+2. Analyze the effect of batch normalization.
+3. Write a report of at most 4 pages.
+
+## Submission
+Submit report.pdf and code.zip through the course portal before the deadline.

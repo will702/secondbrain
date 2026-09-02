@@ -1,0 +1,8 @@
+{
+  "title": "ML CS301 corpus",
+  "fixtures": [
+    "assignment4.txt",
+    "ml_syllabus.md",
+    "schedule.csv"
+  ]
+}
