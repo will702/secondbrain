@@ -24,12 +24,20 @@ LEVEL_CAPABILITIES = {
     1: {"task.create", "note.create", "review.resolve"},  # Assistant
     2: {"task.create", "note.create", "review.resolve", "event.write_soft"},  # Planner
     3: {  # Copilot
-        "task.create", "note.create", "review.resolve",
-        "event.write_soft", "event.write_hard", "email.draft",
+        "task.create",
+        "note.create",
+        "review.resolve",
+        "event.write_soft",
+        "event.write_hard",
+        "email.draft",
     },
     4: {  # Autonomous: same as 3 + no per-action confirmation for non-danger actions
-        "task.create", "note.create", "review.resolve",
-        "event.write_soft", "event.write_hard", "email.draft",
+        "task.create",
+        "note.create",
+        "review.resolve",
+        "event.write_soft",
+        "event.write_hard",
+        "email.draft",
     },
 }
 
@@ -56,7 +64,11 @@ def check(user: User, action: str) -> PolicyDecision:
             requires_confirmation=requires_confirmation,
             reason=(
                 f"autonomy level {user.autonomy_level} permits '{action}'"
-                + ("" if not requires_confirmation else "; confirmation still required below level 4")
+                + (
+                    ""
+                    if not requires_confirmation
+                    else "; confirmation still required below level 4"
+                )
             ),
         )
     return PolicyDecision(

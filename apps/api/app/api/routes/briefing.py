@@ -98,17 +98,25 @@ def audit_log(
     user: User = Depends(get_current_user),
     db: OrmSession = Depends(get_db),
 ):
-    rows = db.execute(
-        select(AuditLog)
-        .where(AuditLog.user_id == user.id)
-        .order_by(AuditLog.created_at.desc())
-        .limit(min(limit, 500))
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(AuditLog)
+            .where(AuditLog.user_id == user.id)
+            .order_by(AuditLog.created_at.desc())
+            .limit(min(limit, 500))
+        )
+        .scalars()
+        .all()
+    )
     return [
         {
-            "id": row.id, "actor": row.actor, "action": row.action,
-            "object_type": row.object_type, "object_id": row.object_id,
-            "detail": row.detail, "created_at": row.created_at.isoformat(),
+            "id": row.id,
+            "actor": row.actor,
+            "action": row.action,
+            "object_type": row.object_type,
+            "object_id": row.object_id,
+            "detail": row.detail,
+            "created_at": row.created_at.isoformat(),
         }
         for row in rows
     ]

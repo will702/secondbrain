@@ -75,9 +75,11 @@ class KnowledgeService:
 
         # Embedding similarity against same-kind entities (exact scan — small N).
         vector = self.embedder.embed_texts([f"{kind.value}: {name}"])[0]
-        candidates = self.db.execute(
-            select(Entity).where(Entity.user_id == user_id, Entity.kind == kind)
-        ).scalars().all()
+        candidates = (
+            self.db.execute(select(Entity).where(Entity.user_id == user_id, Entity.kind == kind))
+            .scalars()
+            .all()
+        )
         for candidate in candidates:
             if candidate.embedding is None:
                 continue
@@ -110,9 +112,9 @@ class KnowledgeService:
         object: Entity,
         confidence: float,
         provenance: dict,
-    ) -> None:
+    ) -> EntityRelationship | None:
         if subject.id == object.id:
-            return
+            return None
         existing = self.db.execute(
             select(EntityRelationship).where(
                 EntityRelationship.subject_entity_id == subject.id,
@@ -123,17 +125,18 @@ class KnowledgeService:
         if existing is not None:
             if confidence > existing.confidence:  # keep the strongest evidence
                 existing.confidence = confidence
-            return
-        self.db.add(
-            EntityRelationship(
-                user_id=user_id,
-                subject_entity_id=subject.id,
-                predicate=predicate,
-                object_entity_id=object.id,
-                confidence=confidence,
-                provenance=provenance,
-            )
+            return existing
+        relationship = EntityRelationship(
+            user_id=user_id,
+            subject_entity_id=subject.id,
+            predicate=predicate,
+            object_entity_id=object.id,
+            confidence=confidence,
+            provenance=provenance,
         )
+        self.db.add(relationship)
+        self.db.flush()
+        return relationship
 
     def add_mention(
         self, user_id, chunk, entity: Entity, surface_form: str, confidence: float
@@ -148,8 +151,15 @@ class KnowledgeService:
             )
         )
 
-    def ensure_project(self, user_id, name: str, kind: str = "course", provenance: dict | None = None) -> Project:
-        entity = self.resolve(user_id, name, EntityKind.course if kind == "course" else EntityKind.project, provenance=provenance)
+    def ensure_project(
+        self, user_id, name: str, kind: str = "course", provenance: dict | None = None
+    ) -> Project:
+        entity = self.resolve(
+            user_id,
+            name,
+            EntityKind.course if kind == "course" else EntityKind.project,
+            provenance=provenance,
+        )
         project = self.db.execute(
             select(Project).where(Project.entity_id == entity.id)
         ).scalar_one_or_none()

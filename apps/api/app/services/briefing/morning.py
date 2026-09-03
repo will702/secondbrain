@@ -50,16 +50,16 @@ def score_task(task: Task, deadline_at: datetime | None, now: datetime) -> tuple
 
 def build_briefing(db: OrmSession, user: User) -> dict:
     now = datetime.now(UTC)
-    local_day_start = (now + timedelta(hours=0)).astimezone(
-        _tz(user)
-    )
+    local_day_start = (now + timedelta(hours=0)).astimezone(_tz(user))
     day_start = local_day_start.replace(hour=0, minute=0, second=0, microsecond=0)
     day_end = day_start + timedelta(days=1)
 
     events = (
         db.execute(
             sa.select(Event)
-            .where(Event.user_id == user.id, Event.starts_at >= day_start, Event.starts_at < day_end)
+            .where(
+                Event.user_id == user.id, Event.starts_at >= day_start, Event.starts_at < day_end
+            )
             .order_by(Event.starts_at)
         )
         .scalars()
@@ -88,72 +88,108 @@ def build_briefing(db: OrmSession, user: User) -> dict:
         .scalars()
         .all()
     )
-    deadline_by_project = {d.project_id: d for d in deadlines}
+    deadline_by_project = {}
+    for deadline in sorted(deadlines, key=lambda row: row.normalized_at):
+        if deadline.project_id is not None:
+            deadline_by_project.setdefault(deadline.project_id, deadline)
+    deadline_by_id = {deadline.id: deadline for deadline in deadlines}
     deadline_by_task = {d.task_id: d for d in deadlines if d.task_id}
+    for task in tasks:
+        if task.deadline_id in deadline_by_id:
+            deadline_by_task[task.id] = deadline_by_id[task.deadline_id]
 
     scored = []
     for task in tasks:
-        deadline = deadline_by_task.get(task.id) or deadline_by_project.get(task.project_id)
+        deadline = deadline_by_task.get(task.id)
+        if deadline is None and task.project_id is not None:
+            deadline = deadline_by_project.get(task.project_id)
         deadline_at = deadline.normalized_at if deadline else None
         score, why = score_task(task, deadline_at, now)
-        scored.append({"task_id": str(task.id), "title": task.title, "score": round(score, 3),
-                       "why": why, "status": task.status.value})
+        scored.append(
+            {
+                "task_id": str(task.id),
+                "title": task.title,
+                "score": round(score, 3),
+                "why": why,
+                "status": task.status.value,
+            }
+        )
     scored.sort(key=lambda item: item["score"], reverse=True)
 
     # ---- risks ----
     risks = []
     for deadline in deadlines:
         hours_left = (deadline.normalized_at - now).total_seconds() / 3600
-        related = [t for t in tasks if deadline_by_task.get(t.id) is deadline
-                   or deadline_by_project.get(t.project_id) is deadline]
+        related = [
+            t
+            for t in tasks
+            if deadline_by_task.get(t.id) is deadline
+            or (t.project_id is not None and deadline_by_project.get(t.project_id) is deadline)
+        ]
         open_minutes = sum(
-            t.estimated_minutes or 60 for t in related
+            t.estimated_minutes or 60
+            for t in related
             if t.status in (TaskStatus.pending, TaskStatus.scheduled)
         )
-        if hours_left <= 48 and related and all(
-            t.status == TaskStatus.pending for t in related
-        ):
-            risks.append({
-                "message": f"'{deadline.title}' is due in {hours_left:.0f}h and hasn't been started",
-                "severity": "high",
-                "evidence": {"deadline_id": str(deadline.id), "task_count": len(related)},
-            })
+        if hours_left <= 48 and related and all(t.status == TaskStatus.pending for t in related):
+            risks.append(
+                {
+                    "message": f"'{deadline.title}' is due in {hours_left:.0f}h and hasn't been started",
+                    "severity": "high",
+                    "evidence": {"deadline_id": str(deadline.id), "task_count": len(related)},
+                }
+            )
         elif hours_left <= 72 and open_minutes > 0:
             free_before = _free_minutes_before(db, user, deadline.normalized_at)
             if free_before < open_minutes:
-                risks.append({
-                    "message": (
-                        f"'{deadline.title}' needs ~{open_minutes // 60}h but only "
-                        f"{free_before // 60}h of free time remains before it"
-                    ),
-                    "severity": "medium",
-                    "evidence": {"deadline_id": str(deadline.id),
-                                 "needed_minutes": open_minutes, "free_minutes": free_before},
-                })
-    conflicts = db.execute(
-        sa.select(ReviewItem).where(
-            ReviewItem.user_id == user.id,
-            ReviewItem.status == "open",
-            ReviewItem.kind.in_(["deadline_conflict", "injection"]),
+                risks.append(
+                    {
+                        "message": (
+                            f"'{deadline.title}' needs ~{open_minutes // 60}h but only "
+                            f"{free_before // 60}h of free time remains before it"
+                        ),
+                        "severity": "medium",
+                        "evidence": {
+                            "deadline_id": str(deadline.id),
+                            "needed_minutes": open_minutes,
+                            "free_minutes": free_before,
+                        },
+                    }
+                )
+    conflicts = (
+        db.execute(
+            sa.select(ReviewItem).where(
+                ReviewItem.user_id == user.id,
+                ReviewItem.status == "open",
+                ReviewItem.kind.in_(["deadline_conflict", "injection"]),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for conflict in conflicts:
-        risks.append({
-            "message": conflict.question[:200],
-            "severity": "high" if conflict.kind == "injection" else "medium",
-            "evidence": {"review_id": str(conflict.id)},
-        })
+        risks.append(
+            {
+                "message": conflict.question[:200],
+                "severity": "high" if conflict.kind == "injection" else "medium",
+                "evidence": {"review_id": str(conflict.id)},
+            }
+        )
 
     # ---- suggestions (deterministic; each traceable to evidence) ----
     suggestions = []
     for item in scored[:3]:
         if item["score"] >= 0.6:
-            suggestions.append({
-                "action": f"Work on '{item['title']}' during your next free block",
-                "why": item["why"],
-            })
+            suggestions.append(
+                {
+                    "action": f"Work on '{item['title']}' during your next free block",
+                    "why": item["why"],
+                }
+            )
     overdue = [
-        t for t in tasks if t.status == TaskStatus.scheduled
+        t
+        for t in tasks
+        if t.status == TaskStatus.scheduled
         and any(  # scheduled session already past and not completed
             e.task_id == t.id and e.kind == EventKind.focus and e.ends_at < now
             for e in db.execute(
@@ -162,10 +198,12 @@ def build_briefing(db: OrmSession, user: User) -> dict:
         )
     ]
     if overdue:
-        suggestions.append({
-            "action": f"{len(overdue)} planned session(s) slipped — recompute your plan on the Calendar page",
-            "why": "missed sessions detected; the planner can rebuild around remaining free time",
-        })
+        suggestions.append(
+            {
+                "action": f"{len(overdue)} planned session(s) slipped — recompute your plan on the Calendar page",
+                "why": "missed sessions detected; the planner can rebuild around remaining free time",
+            }
+        )
 
     # ---- upcoming windows ----
     upcoming = {}
@@ -186,8 +224,11 @@ def build_briefing(db: OrmSession, user: User) -> dict:
         "generated_at": now.isoformat(),
         "today": [
             {
-                "id": str(e.id), "title": e.title, "kind": e.kind.value,
-                "starts_at": e.starts_at.isoformat(), "ends_at": e.ends_at.isoformat(),
+                "id": str(e.id),
+                "title": e.title,
+                "kind": e.kind.value,
+                "starts_at": e.starts_at.isoformat(),
+                "ends_at": e.ends_at.isoformat(),
             }
             for e in events
         ],
@@ -201,7 +242,15 @@ def build_briefing(db: OrmSession, user: User) -> dict:
 
 def readiness_for(deadline: Deadline, tasks: list[Task], now: datetime) -> dict:
     """Explained readiness score — components shown, never fake precision."""
-    related = [t for t in tasks if t.status != TaskStatus.cancelled]
+    related = [
+        task
+        for task in tasks
+        if task.status != TaskStatus.cancelled
+        and (
+            task.deadline_id == deadline.id
+            or (deadline.project_id is not None and task.project_id == deadline.project_id)
+        )
+    ]
     done = [t for t in related if t.status == TaskStatus.done]
     coverage = len(done) / len(related) if related else 0.0
     hours_left = max((deadline.normalized_at - now).total_seconds() / 3600, 0)
@@ -243,14 +292,18 @@ def _free_minutes_before(db: OrmSession, user: User, until: datetime) -> int:
         end_hour = int(str(work.get("end", "22:00")).split(":")[0])
     except ValueError:
         start_hour, end_hour = 9, 22
-    busy = db.execute(
-        sa.select(Event).where(
-            Event.user_id == user.id,
-            Event.starts_at >= now,
-            Event.starts_at < until,
-            Event.kind.in_([EventKind.hard, EventKind.deadline, EventKind.focus]),
+    busy = (
+        db.execute(
+            sa.select(Event).where(
+                Event.user_id == user.id,
+                Event.starts_at >= now,
+                Event.starts_at < until,
+                Event.kind.in_([EventKind.hard, EventKind.deadline, EventKind.focus]),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     busy_minutes = sum((e.ends_at - e.starts_at).total_seconds() / 60 for e in busy)
     days = max((until - now).total_seconds() / 86400, 0)
     capacity = days * (end_hour - start_hour) * 60

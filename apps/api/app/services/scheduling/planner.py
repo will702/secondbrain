@@ -158,7 +158,8 @@ class Planner:
         while remaining_tasks:
             planned_ids = input_ids - {t.id for t in remaining_tasks}
             ready = [
-                t for t in remaining_tasks
+                t
+                for t in remaining_tasks
                 if all(d not in input_ids or d in planned_ids for d in t.depends_on)
             ]
             if not ready:  # cycle — fall back to ignoring the cyclic edges
@@ -170,9 +171,7 @@ class Planner:
             for dep in task.depends_on:
                 earliest = max(earliest, session_end_by_task.get(dep, now))
             start_day = earliest.astimezone(self.tz).date()
-            deadline_day = (
-                task.deadline.astimezone(self.tz).date() if task.deadline else None
-            )
+            deadline_day = task.deadline.astimezone(self.tz).date() if task.deadline else None
             sessions_for_task = 0
 
             day = start_day
@@ -212,9 +211,7 @@ class Planner:
                         # Clip to `earliest` instead of skipping: a free block
                         # that started before now still has usable time left.
                         start = max(free.start, earliest)
-                        length = min(
-                            usable, int((free.end - start).total_seconds() // 60)
-                        )
+                        length = min(usable, int((free.end - start).total_seconds() // 60))
                         if length < min(task.minimum_session_minutes, remaining):
                             continue
                         session = SessionPlan(
@@ -275,13 +272,17 @@ def apply_plan_to_calendar(
 
     task_ids = {s.task_id for s in plan.sessions} | set(replace_task_ids or [])
     if task_ids:
-        prior = db.execute(
-            select(Event).where(
-                Event.user_id == user.id,
-                Event.kind == EventKind.focus,
-                Event.task_id.in_(task_ids),
+        prior = (
+            db.execute(
+                select(Event).where(
+                    Event.user_id == user.id,
+                    Event.kind == EventKind.focus,
+                    Event.task_id.in_(task_ids),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for event in prior:
             db.delete(event)
 

@@ -97,7 +97,7 @@ def search_chunks(
     rerank_slice = candidates[: get_settings().rerank_candidates]
     scores = reranker.rerank_with_breaker(query, [r["text"] for r in rerank_slice])
     if scores is not None:
-        for result, score in zip(rerank_slice, scores):
+        for result, score in zip(rerank_slice, scores, strict=False):
             result["rerank_score"] = round(score, 4)
             result["matched_signals"].append("rerank")
         rerank_slice.sort(key=lambda r: r["rerank_score"], reverse=True)

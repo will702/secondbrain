@@ -11,11 +11,13 @@ from app.models import (
     ActionProposal,
     AuditLog,
     Deadline,
+    Entity,
     Event,
+    Project,
     Task,
     User,
 )
-from app.models.enums import EventKind, ProposalStatus
+from app.models.enums import EntityKind, EventKind, ProposalStatus, TaskStatus
 from app.services.policy import check
 from app.services.proposals.service import decide, propose
 
@@ -78,7 +80,9 @@ def test_proposal_lifecycle_approve_creates_event_and_audit(m5_client, db):
     db.commit()
 
     proposal = propose(
-        db, user, "create_event",
+        db,
+        user,
+        "create_event",
         {
             "title": "Focus: Assignment 4",
             "starts_at": "2026-09-10T19:00:00+07:00",
@@ -91,9 +95,7 @@ def test_proposal_lifecycle_approve_creates_event_and_audit(m5_client, db):
     )
     assert proposal.status == ProposalStatus.pending
 
-    response = m5_client.post(
-        f"/proposals/{proposal.id}/decide", json={"decision": "approve"}
-    )
+    response = m5_client.post(f"/proposals/{proposal.id}/decide", json={"decision": "approve"})
     assert response.status_code == 200
     assert response.json()["status"] == "executed"
 
@@ -111,7 +113,9 @@ def test_proposal_lifecycle_approve_creates_event_and_audit(m5_client, db):
 def test_proposal_modify_flow(m5_client, db):
     user = _user(db)
     proposal = propose(
-        db, user, "create_task",
+        db,
+        user,
+        "create_task",
         {"title": "Draft proposal", "estimated_minutes": 120, "priority": 2},
         reason="Commitment detected in email.",
         proposed_by="mail",
@@ -120,8 +124,11 @@ def test_proposal_modify_flow(m5_client, db):
         f"/proposals/{proposal.id}/decide",
         json={
             "decision": "modify",
-            "modified_payload": {"title": "Draft proposal v2", "estimated_minutes": 90,
-                                 "priority": 1},
+            "modified_payload": {
+                "title": "Draft proposal v2",
+                "estimated_minutes": 90,
+                "priority": 1,
+            },
         },
     )
     assert response.status_code == 200
@@ -132,7 +139,9 @@ def test_proposal_modify_flow(m5_client, db):
 def test_proposal_reject_leaves_no_side_effects(m5_client, db):
     user = _user(db)
     proposal = propose(
-        db, user, "create_task",
+        db,
+        user,
+        "create_task",
         {"title": "Rejected task", "priority": 3},
         reason="test",
         proposed_by="planning",
@@ -159,10 +168,17 @@ def test_proposals_inert_until_user_approval(db, m5_client):
     user.autonomy_level = 0
     db.commit()
     proposal = propose(
-        db, user, "create_event",
-        {"title": "Suggested block", "starts_at": "2026-09-10T19:00:00+07:00",
-         "ends_at": "2026-09-10T20:00:00+07:00", "kind": "focus"},
-        reason="planner suggestion", proposed_by="planning",
+        db,
+        user,
+        "create_event",
+        {
+            "title": "Suggested block",
+            "starts_at": "2026-09-10T19:00:00+07:00",
+            "ends_at": "2026-09-10T20:00:00+07:00",
+            "kind": "focus",
+        },
+        reason="planner suggestion",
+        proposed_by="planning",
     )
     assert proposal.status == ProposalStatus.pending
     assert db.query(Event).count() == 0  # inert: nothing happened yet
@@ -176,9 +192,12 @@ def test_batch_approve(m5_client, db):
     ids = []
     for i in range(3):
         proposal = propose(
-            db, user, "create_task",
+            db,
+            user,
+            "create_task",
             {"title": f"Batch task {i}", "priority": 3},
-            reason="batch test", proposed_by="planning",
+            reason="batch test",
+            proposed_by="planning",
         )
         ids.append(str(proposal.id))
     response = m5_client.post("/proposals/approve-batch", json={"proposal_ids": ids})
@@ -191,8 +210,10 @@ def test_level1_recompute_creates_proposals_not_events(m5_client, db):
     """The killer loop at default autonomy: plan → proposals → approve → events."""
     user = _user(db)
     assert user.autonomy_level == 1  # default
-    db.add(Task(user_id=user.id, title="Prepare slides", estimated_minutes=120,
-                minimum_session_minutes=60))
+    task = Task(
+        user_id=user.id, title="Prepare slides", estimated_minutes=120, minimum_session_minutes=60
+    )
+    db.add(task)
     db.commit()
 
     result = m5_client.post("/schedule/recompute").json()
@@ -202,26 +223,45 @@ def test_level1_recompute_creates_proposals_not_events(m5_client, db):
 
     pending = m5_client.get("/proposals", params={"status_filter": "pending"}).json()
     assert len(pending) >= 1
+    assert all(p["payload"]["task_id"] == str(task.id) for p in pending)
 
     approved = m5_client.post(
         "/proposals/approve-batch",
         json={"proposal_ids": [p["id"] for p in pending]},
     ).json()
     assert all(r["status"] == "executed" for r in approved["results"])
-    assert db.query(Event).filter_by(kind=EventKind.focus).count() >= 1
+    db.expire_all()
+    assert db.query(Event).filter_by(kind=EventKind.focus, task_id=task.id).count() >= 1
+    assert db.get(Task, task.id).status == TaskStatus.scheduled
 
 
 def test_briefing_structure_and_attention(m5_client, db):
     user = _user(db)
     soon = datetime.now(UTC) + timedelta(hours=30)
-    db.add(Deadline(
-        user_id=user.id, title="Midterm", normalized_at=soon, date_is_exact=True,
-        raw_expression="October 20", timezone=user.timezone, confidence=0.9,
-        explicit=True, status="confirmed",
+    deadline = Deadline(
+        user_id=user.id,
+        title="Midterm",
+        normalized_at=soon,
+        date_is_exact=True,
+        raw_expression="October 20",
+        timezone=user.timezone,
+        confidence=0.9,
+        explicit=True,
+        status="confirmed",
         provenance={"document_id": "test"},
-    ))
-    db.add(Task(user_id=user.id, title="Study for midterm", estimated_minutes=300,
-                priority=1, importance=0.9))
+    )
+    db.add(deadline)
+    db.flush()
+    db.add(
+        Task(
+            user_id=user.id,
+            title="Study for midterm",
+            estimated_minutes=300,
+            priority=1,
+            importance=0.9,
+            deadline_id=deadline.id,
+        )
+    )
     db.commit()
 
     briefing = m5_client.get("/briefing").json()
@@ -236,8 +276,70 @@ def test_briefing_structure_and_attention(m5_client, db):
     assert readiness and readiness[0]["title"] == "Midterm"
     assert 0 <= readiness[0]["score"] <= 100
     assert readiness[0]["components"]["tasks_completed"] == "0/1"
-    assert any("free block" in s["action"] or "Work on" in s["action"]
-               for s in briefing["suggestions"])
+    assert any(
+        "free block" in s["action"] or "Work on" in s["action"] for s in briefing["suggestions"]
+    )
+
+
+def test_briefing_uses_only_related_tasks_and_nearest_project_deadline(m5_client, db):
+    user = _user(db)
+    entity = Entity(
+        user_id=user.id,
+        kind=EntityKind.project,
+        name="Launch",
+        normalized_name="launch",
+        aliases=[],
+        confidence=0.9,
+    )
+    db.add(entity)
+    db.flush()
+    project = Project(user_id=user.id, entity_id=entity.id, name="Launch", kind="project")
+    db.add(project)
+    db.flush()
+    later = Deadline(
+        user_id=user.id,
+        project_id=project.id,
+        title="Launch later",
+        normalized_at=datetime.now(UTC) + timedelta(days=6),
+        date_is_exact=True,
+        raw_expression="in six days",
+        timezone=user.timezone,
+        confidence=0.9,
+        explicit=True,
+        status="confirmed",
+        provenance={"document_id": "later"},
+    )
+    sooner = Deadline(
+        user_id=user.id,
+        project_id=project.id,
+        title="Launch sooner",
+        normalized_at=datetime.now(UTC) + timedelta(hours=30),
+        date_is_exact=True,
+        raw_expression="tomorrow",
+        timezone=user.timezone,
+        confidence=0.9,
+        explicit=True,
+        status="confirmed",
+        provenance={"document_id": "sooner"},
+    )
+    db.add_all([later, sooner])
+    db.flush()
+    db.add_all(
+        [
+            Task(user_id=user.id, project_id=project.id, title="Project work", importance=0.9),
+            Task(user_id=user.id, title="Unrelated task", importance=0.9),
+        ]
+    )
+    db.commit()
+
+    briefing = m5_client.get("/briefing").json()
+    priorities = {row["title"]: row["why"] for row in briefing["top_priorities"]}
+    assert "Launch sooner" not in priorities["Unrelated task"]
+    assert "deadline" not in priorities["Unrelated task"]
+    assert "Launch sooner" not in priorities["Project work"]
+    assert sooner.normalized_at.strftime("%a %d %b %H:%M") in priorities["Project work"]
+    readiness = {row["title"]: row for row in briefing["readiness"]}
+    assert readiness["Launch sooner"]["components"]["tasks_completed"] == "0/1"
 
 
 def test_duplicate_event_approval_is_idempotent(m5_client, db):
@@ -263,8 +365,9 @@ def test_duplicate_event_approval_is_idempotent(m5_client, db):
 def test_recompute_supersedes_stale_planner_proposals(m5_client, db):
     """A second recompute must replace, not stack, pending planner proposals."""
     user = _user(db)
-    db.add(Task(user_id=user.id, title="One task", estimated_minutes=120,
-                minimum_session_minutes=60))
+    db.add(
+        Task(user_id=user.id, title="One task", estimated_minutes=120, minimum_session_minutes=60)
+    )
     db.commit()
 
     first = m5_client.post("/schedule/recompute").json()

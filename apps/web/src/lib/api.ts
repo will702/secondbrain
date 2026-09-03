@@ -16,7 +16,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
+    const text = await response.text().catch(() => "");
+    let detail = text || response.statusText || "Request failed";
+    try {
+      const body = JSON.parse(text) as { detail?: string };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // Plain-text API errors are already useful.
+    }
     throw new ApiError(response.status, detail.slice(0, 300));
   }
   if (response.status === 204) return undefined as T;
@@ -27,6 +34,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: (files: FileList | File[]) => {
     const form = new FormData();
     for (const file of Array.from(files)) form.append("files", file);
@@ -124,10 +132,13 @@ export interface GraphOut {
   entities: { id: string; kind: string; name: string; aliases: string[]; confidence: number }[];
   relations: {
     id: string;
+    subject_id?: string;
     subject_name: string;
     predicate: string;
+    object_id?: string;
     object_name: string;
     confidence: number;
+    provenance?: Record<string, unknown>;
   }[];
   projects: { id: string; name: string; kind: string }[];
 }

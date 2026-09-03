@@ -41,9 +41,7 @@ class Document(TimestampMixin, Base):
     provenance: Mapped[dict | None] = mapped_column(JSONB)
     processed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
-    __table_args__ = (
-        sa.UniqueConstraint("user_id", "sha256", name="uq_documents_user_sha"),
-    )
+    __table_args__ = (sa.UniqueConstraint("user_id", "sha256", name="uq_documents_user_sha"),)
 
 
 class DocumentChunk(Base):

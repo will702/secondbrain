@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.api.schemas import ChunkOut, DocumentOut
 from app.core.db import get_db
 from app.models import Document, DocumentChunk, User
+from app.services.ingestion.lineage import retract_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -59,9 +60,7 @@ def get_document(
     out = DocumentOut.model_validate(document)
     out.chunk_count = (
         db.execute(
-            select(func.count(DocumentChunk.id)).where(
-                DocumentChunk.document_id == document.id
-            )
+            select(func.count(DocumentChunk.id)).where(DocumentChunk.document_id == document.id)
         ).scalar()
         or 0
     )
@@ -101,3 +100,14 @@ def get_document_file(
         filename=document.original_filename,
         media_type=document.mime_type or "application/octet-stream",
     )
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: OrmSession = Depends(get_db),
+):
+    document = _get_owned_document(db, user, document_id)
+    retract_document(db, user, document)
+    return None

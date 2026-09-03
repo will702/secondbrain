@@ -43,8 +43,11 @@ def _synth_responder():
     def respond(agent, purpose, user_prompt):
         if purpose == "classify":
             return {
-                "doc_kind": "syllabus", "title": "Machine Learning CS301",
-                "topic": "Machine Learning", "importance": 0.8, "summary": "Syllabus.",
+                "doc_kind": "syllabus",
+                "title": "Machine Learning CS301",
+                "topic": "Machine Learning",
+                "importance": 0.8,
+                "summary": "Syllabus.",
             }
         if purpose == "reasoning":
             return {"answer": "Based on your syllabus, Assignment 4 is due October 13."}
@@ -110,6 +113,12 @@ def test_ask_deadlines_uses_structured_path(ask_client):
     assert "Assignment 4" in titles
     # Citations reference the source document with the raw quote.
     assert any(c.document_id for c in map(_citation, body["citations"]))
+
+
+def test_specific_deadline_question_is_not_limited_to_next_week(ask_client):
+    response = ask_client.post("/ask", json={"question": "When is Assignment 4 due?"})
+    deadlines = response.json()["facts"]["deadlines"]
+    assert any(deadline["title"] == "Assignment 4" for deadline in deadlines)
 
 
 def _citation(raw: dict):

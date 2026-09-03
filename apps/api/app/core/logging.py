@@ -7,14 +7,25 @@ import uuid
 _CONFIGURED = False
 
 # Never log these keys/values — sensitive payloads stay server-side only.
-_REDACTED_KEYS = {"password", "token", "access_token", "refresh_token", "credential",
-                  "credentials", "authorization", "cookie", "body_text", "content"}
+_REDACTED_KEYS = {
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "credential",
+    "credentials",
+    "authorization",
+    "cookie",
+    "body_text",
+    "content",
+}
 
 
 def _scrub(value: object) -> object:
     if isinstance(value, dict):
         return {
-            k: ("[redacted]" if k.lower() in _REDACTED_KEYS else _scrub(v)) for k, v in value.items()
+            k: ("[redacted]" if k.lower() in _REDACTED_KEYS else _scrub(v))
+            for k, v in value.items()
         }
     if isinstance(value, list):
         return [_scrub(v) for v in value]

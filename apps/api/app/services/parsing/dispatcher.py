@@ -1,3 +1,4 @@
+import hashlib
 import io
 import logging
 import zipfile
@@ -13,6 +14,8 @@ EXTENSIONS: set[str] = set()
 # Zip archives: how many entries and total bytes we will extract (zip-bomb guard).
 MAX_ZIP_ENTRIES = 100
 MAX_ZIP_TOTAL_BYTES = 200 * 1024 * 1024
+MAX_OCR_IMAGES_PER_PAGE = 2
+MIN_OCR_IMAGE_PIXELS = 40_000
 
 
 def register_parser(*extensions: str):
@@ -82,6 +85,57 @@ def parse_csv(data: bytes, filename: str) -> ParsedDocument:
     )
 
 
+def _ocr_image_bytes(image_data: bytes) -> str:
+    """Run bounded Tesseract OCR on one encoded image."""
+    import shutil
+    import subprocess
+
+    tesseract_bin = shutil.which("tesseract")
+    if tesseract_bin is None:
+        raise ParseError("This PDF contains only scanned images. Install Tesseract OCR to read it.")
+    try:
+        proc = subprocess.run(
+            [tesseract_bin, "stdin", "stdout"],
+            input=image_data,
+            capture_output=True,
+            timeout=20,
+        )
+        if proc.returncode == 0:
+            return proc.stdout.decode("utf-8", errors="replace").strip()
+    except subprocess.TimeoutExpired as exc:
+        raise ParseError("Tesseract OCR timed out while reading a scanned PDF") from exc
+    except OSError as exc:
+        raise ParseError(f"Tesseract OCR could not start: {exc}") from exc
+    return ""
+
+
+def _extract_page_images(page) -> list[bytes]:
+    """Return the largest unique encoded images referenced by a PDF page."""
+    try:
+        candidates = sorted(
+            page.images,
+            key=lambda image: image.image.width * image.image.height,
+            reverse=True,
+        )
+    except Exception as exc:
+        logger.debug("Failed extracting images from PDF page: %s", exc)
+        return []
+
+    selected: list[bytes] = []
+    seen: set[str] = set()
+    for image in candidates:
+        if image.image.width * image.image.height < MIN_OCR_IMAGE_PIXELS:
+            continue
+        digest = hashlib.sha256(image.data).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        selected.append(image.data)
+        if len(selected) == MAX_OCR_IMAGES_PER_PAGE:
+            break
+    return selected
+
+
 @register_parser("pdf")
 def parse_pdf(data: bytes, filename: str) -> ParsedDocument:
     from pypdf import PdfReader
@@ -90,6 +144,18 @@ def parse_pdf(data: bytes, filename: str) -> ParsedDocument:
     sections: list[Section] = []
     for index, page in enumerate(reader.pages, start=1):
         text = (page.extract_text() or "").strip()
+
+        # Fallback to OCR if page has no extractable digital text stream
+        if not text:
+            images = _extract_page_images(page)
+            if images:
+                ocr_texts: list[str] = []
+                for img_bytes in images:
+                    ocr_result = _ocr_image_bytes(img_bytes)
+                    if ocr_result:
+                        ocr_texts.append(ocr_result)
+                text = "\n\n".join(ocr_texts).strip()
+
         if text:
             sections.append(Section(title=f"Page {index}", text=text, page=index))
     return ParsedDocument(sections=sections, page_count=len(reader.pages))

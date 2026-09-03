@@ -36,9 +36,7 @@ def process_one() -> bool:
         if job is None:
             return False
         handler = HANDLERS.get(job.type)
-        logger.info(
-            "job %s attempt %d", job.type, job.attempts, extra={"job_id": job.id}
-        )
+        logger.info("job %s attempt %d", job.type, job.attempts, extra={"job_id": job.id})
         try:
             if handler is None:
                 logger.error("no handler for job type %r", job.type)

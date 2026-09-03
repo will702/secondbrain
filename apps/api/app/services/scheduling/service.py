@@ -40,9 +40,7 @@ def build_planner_tasks(db: OrmSession, user: User) -> list[PlannerTask]:
     if tasks:
         dependencies = (
             db.execute(
-                sa.select(TaskDependency).where(
-                    TaskDependency.task_id.in_([t.id for t in tasks])
-                )
+                sa.select(TaskDependency).where(TaskDependency.task_id.in_([t.id for t in tasks]))
             )
             .scalars()
             .all()
@@ -94,15 +92,15 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
         tz_name=user.timezone,
     )
     planner_tasks = build_planner_tasks(db, user)
-    events = db.execute(
-        sa.select(Event).where(Event.user_id == user.id)
-    ).scalars().all()
+    events = db.execute(sa.select(Event).where(Event.user_id == user.id)).scalars().all()
     hard_events = [e for e in events if e.kind in (EventKind.hard, EventKind.deadline)]
     focus_events = [
         e for e in events if e.kind == EventKind.focus and e.starts_at > datetime.now(UTC)
     ]
     replace_ids = [str(e.task_id) for e in focus_events if e.task_id]
-    plan = planner.plan(planner_tasks, hard_events, now=datetime.now(UTC), horizon_days=horizon_days)
+    plan = planner.plan(
+        planner_tasks, hard_events, now=datetime.now(UTC), horizon_days=horizon_days
+    )
 
     if not apply and user.autonomy_level < 2:
         # Assistant level (1) may not write calendar events — the computed plan
@@ -113,13 +111,17 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
         from app.services.proposals.service import propose
 
         superseded = 0
-        stale = db.execute(
-            sa.select(ActionProposal).where(
-                ActionProposal.user_id == user.id,
-                ActionProposal.proposed_by == "planning",
-                ActionProposal.status == ProposalStatus.pending,
+        stale = (
+            db.execute(
+                sa.select(ActionProposal).where(
+                    ActionProposal.user_id == user.id,
+                    ActionProposal.proposed_by == "planning",
+                    ActionProposal.status == ProposalStatus.pending,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         from datetime import UTC as _UTC
 
         for old in stale:
@@ -130,12 +132,15 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
         created_proposals = 0
         for session in plan.sessions[:20]:
             propose(
-                db, user, "create_event",
+                db,
+                user,
+                "create_event",
                 {
                     "title": f"Focus: {session.title}",
                     "starts_at": session.start.isoformat(),
                     "ends_at": session.end.isoformat(),
                     "kind": "focus",
+                    "task_id": session.task_id,
                 },
                 reason=f"Planner suggestion ({session.start.strftime('%a %H:%M')}): part of the computed plan for this task",
                 proposed_by="planning",
@@ -195,14 +200,18 @@ def reschedule_after_missed(db: OrmSession, user: User, event: Event) -> dict:
     explicit user action, so the rebuilt plan applies directly."""
     if event.kind != EventKind.focus or not event.task_id:
         return {"detail": "not a focus session"}
-    future = db.execute(
-        sa.select(Event).where(
-            Event.user_id == user.id,
-            Event.kind == EventKind.focus,
-            Event.task_id == event.task_id,
-            Event.starts_at > datetime.now(UTC),
+    future = (
+        db.execute(
+            sa.select(Event).where(
+                Event.user_id == user.id,
+                Event.kind == EventKind.focus,
+                Event.task_id == event.task_id,
+                Event.starts_at > datetime.now(UTC),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for session in future:
         db.delete(session)
     db.commit()

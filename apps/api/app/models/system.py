@@ -177,7 +177,9 @@ class Job(Base):
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(),
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
         nullable=False,
     )
 
@@ -199,3 +201,27 @@ class ReviewItem(TimestampMixin, Base):
     )
     resolution: Mapped[dict | None] = mapped_column(JSONB)
     provenance: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class DocumentDerivation(Base):
+    """A source edge from an uploaded document to one derived domain object."""
+
+    __tablename__ = "document_derivations"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    object_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    object_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), nullable=False)
+    provenance: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "document_id", "object_type", "object_id", name="uq_document_derivation"
+        ),
+        sa.Index("derivations_object_idx", "object_type", "object_id"),
+    )

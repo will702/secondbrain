@@ -25,12 +25,12 @@ class TimestampMixin:
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(),
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
         nullable=False,
     )
 
 
 def uuid_pk() -> Mapped[uuid.UUID]:
-    return mapped_column(
-        sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()")
-    )
+    return mapped_column(sa.Uuid(), primary_key=True, server_default=sa.text("gen_random_uuid()"))

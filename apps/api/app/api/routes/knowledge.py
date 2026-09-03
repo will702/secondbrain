@@ -61,9 +61,11 @@ def knowledge_graph(user: User = Depends(get_current_user), db: OrmSession = Dep
         .scalars()
         .all()
     )
-    relations = db.execute(
-        select(EntityRelationship).where(EntityRelationship.user_id == user.id)
-    ).scalars().all()
+    relations = (
+        db.execute(select(EntityRelationship).where(EntityRelationship.user_id == user.id))
+        .scalars()
+        .all()
+    )
     name_by_id = {e.id: e.name for e in entities}
     projects = db.execute(select(Project).where(Project.user_id == user.id)).scalars().all()
     return GraphOut(
@@ -98,18 +100,20 @@ def entity_detail(
     if entity is None or entity.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Entity not found")
     mentions = (
+        db.execute(select(EntityMention).where(EntityMention.entity_id == entity.id).limit(200))
+        .scalars()
+        .all()
+    )
+    relations = (
         db.execute(
-            select(EntityMention).where(EntityMention.entity_id == entity.id).limit(200)
+            select(EntityRelationship).where(
+                (EntityRelationship.subject_entity_id == entity.id)
+                | (EntityRelationship.object_entity_id == entity.id)
+            )
         )
         .scalars()
         .all()
     )
-    relations = db.execute(
-        select(EntityRelationship).where(
-            (EntityRelationship.subject_entity_id == entity.id)
-            | (EntityRelationship.object_entity_id == entity.id)
-        )
-    ).scalars().all()
     return {
         **EntityOut.model_validate(entity).model_dump(),
         "mention_count": len(mentions),

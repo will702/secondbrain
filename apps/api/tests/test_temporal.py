@@ -25,7 +25,9 @@ def test_month_day_eod():
     result = norm("October 13")
     assert result.normalized_at is not None
     assert (result.normalized_at.year, result.normalized_at.month, result.normalized_at.day) == (
-        2026, 10, 13
+        2026,
+        10,
+        13,
     )
     assert result.normalized_at.hour == 23  # date-only deadlines default to end of day
     assert result.confidence >= CONFIRM_THRESHOLD and result.explicit

@@ -42,9 +42,11 @@ def ingest_document(db: OrmSession, document_id: UUID, run_extraction: bool = Tr
         return document  # already done (idempotent retry)
 
     # --- Stage 1: parse + chunk + embed ---
-    chunks = db.execute(
-        select(DocumentChunk).where(DocumentChunk.document_id == document_id)
-    ).scalars().all()
+    chunks = (
+        db.execute(select(DocumentChunk).where(DocumentChunk.document_id == document_id))
+        .scalars()
+        .all()
+    )
 
     if not chunks:
         document.status = DocumentStatus.parsing
@@ -87,9 +89,11 @@ def ingest_document(db: OrmSession, document_id: UUID, run_extraction: bool = Tr
                 )
             )
         db.commit()
-        chunks = db.execute(
-            select(DocumentChunk).where(DocumentChunk.document_id == document_id)
-        ).scalars().all()
+        chunks = (
+            db.execute(select(DocumentChunk).where(DocumentChunk.document_id == document_id))
+            .scalars()
+            .all()
+        )
 
     # Embed any chunks without vectors (resume-safe).
     missing = [c for c in chunks if c.embedding is None]
@@ -101,9 +105,7 @@ def ingest_document(db: OrmSession, document_id: UUID, run_extraction: bool = Tr
             for chunk_row, vector in zip(batch, vectors, strict=True):
                 chunk_row.embedding = vector
         db.commit()
-        logger.info(
-            "embedded %d chunks", len(missing), extra={"document_id": str(document_id)}
-        )
+        logger.info("embedded %d chunks", len(missing), extra={"document_id": str(document_id)})
 
     # --- Stage 2: extraction (M2) ---
     if run_extraction:

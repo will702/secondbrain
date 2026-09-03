@@ -123,7 +123,10 @@ class LLMClient:
                     raise LLMError("model returned no parseable structured output")
                 result = schema_model.model_validate_json(raw_json)
                 _finish_run(
-                    run, db, "succeeded", started,
+                    run,
+                    db,
+                    "succeeded",
+                    started,
                     body.get("usage", {}),
                 )
                 return result
@@ -139,7 +142,9 @@ class LLMClient:
                     {"role": "user", "content": repair},
                 ]
         _finish_run(run, db, "failed", started, {}, error=str(last_error))
-        raise LLMError(f"structured call failed after {self.max_retries + 1} attempts: {last_error}")
+        raise LLMError(
+            f"structured call failed after {self.max_retries + 1} attempts: {last_error}"
+        )
 
     @staticmethod
     def _extract_json(message: dict) -> str | None:

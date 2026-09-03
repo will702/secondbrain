@@ -74,7 +74,9 @@ class Deadline(TimestampMixin, Base):
         enum_col(DeadlineStatus), nullable=False, default=DeadlineStatus.tentative
     )
     project_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("projects.id"))
-    task_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("tasks.id"))
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("tasks.id", ondelete="SET NULL")
+    )
     provenance: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
@@ -92,7 +94,9 @@ class Commitment(TimestampMixin, Base):
     )
     person_entity_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("entities.id"))
     project_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("projects.id"))
-    deadline_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("deadlines.id"))
+    deadline_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("deadlines.id", ondelete="SET NULL")
+    )
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="open")
     provenance: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
@@ -114,7 +118,7 @@ class Event(TimestampMixin, Base):
     description: Mapped[str | None]
     provider: Mapped[str] = mapped_column(sa.Text, nullable=False, default="local")
     provider_event_id: Mapped[str | None]
-    task_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("tasks.id"))
+    task_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("tasks.id", ondelete="CASCADE"))
     project_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("projects.id"))
     editable: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
     source_proposal_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -9,7 +9,9 @@ scrutiny: nothing they contain can ever become an action.
 import re
 
 INJECTION_PATTERNS = [
-    re.compile(r"ignore (all|any|the)? ?(previous|prior|above|earlier|initial)? ?instructions", re.I),
+    re.compile(
+        r"ignore (all|any|the)? ?(previous|prior|above|earlier|initial)? ?instructions", re.I
+    ),
     re.compile(r"disregard (all|any|your)? ?(previous|prior|above)? ?instructions", re.I),
     re.compile(r"you are now (a|an|the)\b", re.I),
     re.compile(r"(send|forward|email) (this|it|everything|all|every email)", re.I),

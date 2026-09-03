@@ -20,8 +20,9 @@ def rerank(query: str, texts: list[str]) -> list[float] | None:
     settings = get_settings()
     if not settings.reranker_enabled or not texts:
         return None
-    base = (settings.reranker_base_url or settings.embedding_base_url
-            or settings.llm_base_url).rstrip("/")
+    base = (
+        settings.reranker_base_url or settings.embedding_base_url or settings.llm_base_url
+    ).rstrip("/")
     try:
         response = httpx.post(
             f"{base}/rerank",

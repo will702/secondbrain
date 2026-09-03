@@ -1,10 +1,12 @@
 """Job handler registry: job.type → handler(db, job)."""
 
 import logging
+import uuid
 
+import sqlalchemy as sa
 from sqlalchemy.orm import Session as OrmSession
 
-from app.models import Job, User
+from app.models import Document, Job, User
 from app.services.ingestion.pipeline import ingest_document
 from app.workers.queue import enqueue
 
@@ -12,12 +14,29 @@ logger = logging.getLogger("secondbrain.workers")
 
 
 def handle_ingest_document(db: OrmSession, job: Job) -> None:
-    document_id = job.payload["document_id"]
-    ingest_document(db, document_id)
+    document_id = uuid.UUID(job.payload["document_id"])
+    db.execute(
+        sa.text("SELECT pg_advisory_xact_lock(hashtext(:document_id))"),
+        {"document_id": str(document_id)},
+    )
+    if db.get(Document, document_id) is None:
+        return
+    try:
+        ingest_document(db, document_id)
+    except Exception as exc:
+        from app.models.enums import DocumentStatus
+
+        doc = db.get(Document, document_id)
+        if doc is not None and doc.status != DocumentStatus.processed:
+            doc.status = DocumentStatus.failed
+            doc.error = f"{type(exc).__name__}: {exc}"
+            db.commit()
+        raise
+
     enqueue(
         db,
         "plan.recompute",
-        {"reason": "document_processed", "document_id": document_id},
+        {"reason": "document_processed", "document_id": str(document_id)},
         user_id=job.user_id,
         idempotency_key=f"plan-recompute-doc-{document_id}-{_today_key()}",
     )

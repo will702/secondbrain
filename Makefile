@@ -1,6 +1,7 @@
-.PHONY: help db api workers web test eval lint client
+.PHONY: help dev db api workers web test eval lint client
 
 help:
+	@echo "dev      — start all services (database, API, workers, web) in one command"
 	@echo "db       — start Postgres+pgvector (docker compose)"
 	@echo "api      — run FastAPI dev server"
 	@echo "workers  — run background job workers"
@@ -9,6 +10,9 @@ help:
 	@echo "eval     — run AI evaluation suite (needs live LLM)"
 	@echo "lint     — ruff check"
 	@echo "client   — regenerate typed TS client from OpenAPI"
+
+dev:
+	@node scripts/start-all.mjs
 
 db:
 	docker compose up -d

@@ -21,9 +21,7 @@ from app.models import Commitment, Deadline, Entity, Task, User
 from app.services.extraction.verify import quote_in_text
 from app.services.retrieval.hybrid import search_chunks
 
-DEADLINE_WORDS = re.compile(
-    r"\b(due|deadlines?|upcoming|exams?|midterm\w*|assignments?)\b", re.I
-)
+DEADLINE_WORDS = re.compile(r"\b(due|deadlines?|upcoming|exams?|midterm\w*|assignments?)\b", re.I)
 COMMITMENT_WORDS = re.compile(r"\b(commitments?|promised|promise\w*|owe|agreed)\b", re.I)
 BEHIND_WORDS = re.compile(r"\b(behind|overdue|missed|late)\b", re.I)
 WHAT_CHANGED = re.compile(r"\bwhat changed|today[' ]s summary|recap\b", re.I)
@@ -53,20 +51,26 @@ def _parse_window(question: str) -> tuple[datetime, datetime]:
         return now, now + timedelta(days=120)
     if "month" in lowered:
         return now, now + timedelta(days=30)
-    return now, now + timedelta(days=7)  # default window: next week
+    if "next week" in lowered or "upcoming" in lowered:
+        return now, now + timedelta(days=7)
+    return now, now + timedelta(days=365)
 
 
 def _deadline_facts(db: OrmSession, user: User, question: str) -> dict:
     start, end = _parse_window(question)
-    deadlines = db.execute(
-        select(Deadline).where(
-            Deadline.user_id == user.id,
-            Deadline.status == "confirmed",
-            Deadline.normalized_at.isnot(None),
-            Deadline.normalized_at >= start,
-            Deadline.normalized_at <= end,
+    deadlines = (
+        db.execute(
+            select(Deadline).where(
+                Deadline.user_id == user.id,
+                Deadline.status == "confirmed",
+                Deadline.normalized_at.isnot(None),
+                Deadline.normalized_at >= start,
+                Deadline.normalized_at <= end,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "window": [start.isoformat(), end.isoformat()],
         "deadlines": [
@@ -83,14 +87,18 @@ def _deadline_facts(db: OrmSession, user: User, question: str) -> dict:
 
 def _commitment_facts(db: OrmSession, user: User, question: str) -> dict:
     person_name = None
-    for match in re.finditer(r"\b(?:to|from|with|made to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)", question):
+    for match in re.finditer(
+        r"\b(?:to|from|with|made to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)", question
+    ):
         person_name = match.group(1)
         break
     statement = select(Commitment).where(Commitment.user_id == user.id)
     if person_name:
-        people = db.execute(
-            select(Entity).where(Entity.user_id == user.id, Entity.kind == "person")
-        ).scalars().all()
+        people = (
+            db.execute(select(Entity).where(Entity.user_id == user.id, Entity.kind == "person"))
+            .scalars()
+            .all()
+        )
         person_ids = [p.id for p in people if person_name.lower() in p.name.lower()]
         statement = statement.where(Commitment.person_entity_id.in_(person_ids or [None]))
     commitments = db.execute(statement).scalars().all()
@@ -111,14 +119,18 @@ def _commitment_facts(db: OrmSession, user: User, question: str) -> dict:
 def _behind_facts(db: OrmSession, user: User) -> dict:
     now = datetime.now(UTC)
     tasks = db.execute(select(Task).where(Task.user_id == user.id)).scalars().all()
-    overdue_deadlines = db.execute(
-        select(Deadline).where(
-            Deadline.user_id == user.id,
-            Deadline.normalized_at.isnot(None),
-            Deadline.normalized_at < now,
-            Deadline.status != "rejected",
+    overdue_deadlines = (
+        db.execute(
+            select(Deadline).where(
+                Deadline.user_id == user.id,
+                Deadline.normalized_at.isnot(None),
+                Deadline.normalized_at < now,
+                Deadline.status != "rejected",
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "open_tasks": [t.title for t in tasks if t.status in ("pending", "scheduled")],
         "overdue_deadlines": [
@@ -194,6 +206,7 @@ def answer_question(
         ],
     }
     try:
+
         class _Narration(BaseModel):
             answer: str
 
@@ -207,7 +220,7 @@ def answer_question(
                 "(<=6 sentences). If the evidence is empty, say what's missing instead "
                 "of guessing. Evidence:\n"
                 + json.dumps(evidence, default=str)[:6000]
-                + "\nCall `submit` with {\"answer\": ...}."
+                + '\nCall `submit` with {"answer": ...}.'
             ),
             schema_model=_Narration,
             db=db,
@@ -227,9 +240,7 @@ def answer_question(
             items = facts.get("commitments", [])
             answer_text = f"{len(items)} commitment(s) found." if items else "No commitments found."
         else:
-            answer_text = (
-                chunks[0]["text"][:300] if chunks else "No relevant documents found."
-            )
+            answer_text = chunks[0]["text"][:300] if chunks else "No relevant documents found."
 
     # Citation hygiene: quotes must appear in the evidence we actually have.
     valid_citations = [c for c in citations if c.quote]

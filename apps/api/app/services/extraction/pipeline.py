@@ -16,6 +16,7 @@ database without passing schema + quote + confidence gates.
 """
 
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
@@ -42,6 +43,7 @@ from app.models.enums import CommitmentConfidence, DeadlineStatus, DocumentStatu
 from app.services.extraction.injection import detect_injection
 from app.services.extraction.schemas import DocumentProfile
 from app.services.extraction.verify import quote_in_text
+from app.services.ingestion.lineage import record_derivation
 from app.services.knowledge.resolution import KnowledgeService, coerce_kind, provenance_for
 from app.services.temporal.normalizer import CONFIRM_THRESHOLD, normalize_when
 
@@ -96,17 +98,31 @@ def _review(db, user_id, kind: str, question: str, payload: dict, provenance: di
         .first()
     )
     if existing is not None:
-        return
-    db.add(
-        ReviewItem(
-            user_id=user_id, kind=kind, question=question, payload=payload, provenance=provenance
+        record_derivation(
+            db, uuid.UUID(provenance["document_id"]), "review", existing.id, provenance
         )
+        return
+    review = ReviewItem(
+        user_id=user_id, kind=kind, question=question, payload=payload, provenance=provenance
     )
+    db.add(review)
+    db.flush()
+    record_derivation(db, uuid.UUID(provenance["document_id"]), "review", review.id, provenance)
 
 
 _MONTH_WORDS = {
-    "january", "february", "march", "april", "may", "june", "july",
-    "august", "september", "october", "november", "december",
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
 }
 
 
@@ -116,8 +132,21 @@ def _title_tokens(title: str) -> tuple[set[str], set[str]]:
     same item; numbers are kept separate to distinguish Assignment 4 vs 3."""
     from app.services.knowledge.resolution import normalize_name
 
-    stop = {"the", "a", "an", "of", "for", "to", "and", "in", "on", "due", "deadline",
-            "submit", "week"}
+    stop = {
+        "the",
+        "a",
+        "an",
+        "of",
+        "for",
+        "to",
+        "and",
+        "in",
+        "on",
+        "due",
+        "deadline",
+        "submit",
+        "week",
+    }
     words: set[str] = set()
     numbers: set[str] = set()
     for token in normalize_name(title).split():
@@ -163,32 +192,32 @@ def _detect_deadline_conflicts(db, deadline: Deadline, provenance: dict) -> None
             continue
         delta = abs((other.normalized_at - deadline.normalized_at).total_seconds())
         if delta > 24 * 3600:
-                _review(
-                    db,
-                    deadline.user_id,
-                    "deadline_conflict",
-                    f"Deadline conflict detected: '{deadline.title}' has dates "
-                    f"{deadline.normalized_at.date()} and {other.normalized_at.date()} "
-                    f"from different sources. Which is correct?",
-                    {
-                        "deadlines": [
-                            {
-                                "id": str(deadline.id),
-                                "title": deadline.title,
-                                "date": deadline.normalized_at.isoformat(),
-                                "source": provenance,
-                            },
-                            {
-                                "id": str(other.id),
-                                "title": other.title,
-                                "date": other.normalized_at.isoformat(),
-                                "source": other.provenance,
-                            },
-                        ]
-                    },
-                    provenance,
-                )
-                break
+            _review(
+                db,
+                deadline.user_id,
+                "deadline_conflict",
+                f"Deadline conflict detected: '{deadline.title}' has dates "
+                f"{deadline.normalized_at.date()} and {other.normalized_at.date()} "
+                f"from different sources. Which is correct?",
+                {
+                    "deadlines": [
+                        {
+                            "id": str(deadline.id),
+                            "title": deadline.title,
+                            "date": deadline.normalized_at.isoformat(),
+                            "source": provenance,
+                        },
+                        {
+                            "id": str(other.id),
+                            "title": other.title,
+                            "date": other.normalized_at.isoformat(),
+                            "source": other.provenance,
+                        },
+                    ]
+                },
+                provenance,
+            )
+            break
 
 
 def extract_document(db: OrmSession, document: Document, chunks) -> Document:
@@ -235,7 +264,9 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
     # after the user resolves the review item.
     if injection_flags:
         _review(
-            db, document.user_id, "injection",
+            db,
+            document.user_id,
+            "injection",
             "This document contains instruction-like content attempting to steer the AI "
             "(possible prompt injection). It was treated strictly as data and quarantined: "
             "no deadlines, tasks, or entities were created from it. Review?",
@@ -266,9 +297,19 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
         project = knowledge.ensure_project(
             document.user_id,
             project_name,
-            kind="course" if document.doc_kind in (DocumentKind.syllabus, DocumentKind.lecture_slides, DocumentKind.exam, DocumentKind.assignment) else "project",
+            kind="course"
+            if document.doc_kind
+            in (
+                DocumentKind.syllabus,
+                DocumentKind.lecture_slides,
+                DocumentKind.exam,
+                DocumentKind.assignment,
+            )
+            else "project",
             provenance=provenance_for(document),
         )
+        record_derivation(db, document.id, "project", project.id, provenance_for(document))
+        record_derivation(db, document.id, "entity", project.entity_id, provenance_for(document))
         document.project_id = project.id
         db.commit()
 
@@ -305,6 +346,9 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 .first()
             )
             if duplicate is not None:
+                record_derivation(
+                    db, document.id, "deadline", duplicate.id, {**chunk_prov, "quote": quote}
+                )
                 continue
             normalized = normalize_when(
                 when_text,
@@ -330,20 +374,28 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
             )
             db.add(deadline)
             db.flush()
+            record_derivation(db, document.id, "deadline", deadline.id, deadline.provenance)
             if normalized.needs_review and not normalized.is_recurrence:
                 _review(
-                    db, document.user_id, "deadline",
+                    db,
+                    document.user_id,
+                    "deadline",
                     f"I found a possible date '{deadline.raw_expression}' for "
                     f"'{deadline.title}' but couldn't resolve it confidently "
                     f"({normalized.note or 'relative expression'}). What is the actual date?",
-                    {"deadline_id": str(deadline.id), "title": deadline.title,
-                     "raw_expression": deadline.raw_expression},
+                    {
+                        "deadline_id": str(deadline.id),
+                        "title": deadline.title,
+                        "raw_expression": deadline.raw_expression,
+                    },
                     chunk_prov,
                 )
                 review_count += 1
             elif normalized.is_recurrence:
                 _review(
-                    db, document.user_id, "deadline",
+                    db,
+                    document.user_id,
+                    "deadline",
                     f"'{deadline.raw_expression}' looks like a recurring schedule "
                     f"('{deadline.title}'). Add it as a recurring calendar event?",
                     {"deadline_id": str(deadline.id), "recurring": True},
@@ -369,6 +421,8 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 confidence=0.6,
             )
             db.add(task)
+            db.flush()
+            record_derivation(db, document.id, "task", task.id, task.provenance or chunk_prov)
 
         # Commitments
         for commitment_fact in extraction.commitments:
@@ -377,19 +431,22 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 continue
             level = commitment_fact.get("confidence", "possible")
             confidence_enum = (
-                CommitmentConfidence.confirmed if level == "confirmed"
-                else CommitmentConfidence.likely if level == "likely"
+                CommitmentConfidence.confirmed
+                if level == "confirmed"
+                else CommitmentConfidence.likely
+                if level == "likely"
                 else CommitmentConfidence.possible
             )
-            db.add(
-                Commitment(
-                    user_id=document.user_id,
-                    text=str(commitment_fact.get("text") or quote)[:1000],
-                    direction=str(commitment_fact.get("direction") or "user_promised"),
-                    confidence=confidence_enum,
-                    provenance={**chunk_prov, "quote": quote},
-                )
+            commitment = Commitment(
+                user_id=document.user_id,
+                text=str(commitment_fact.get("text") or quote)[:1000],
+                direction=str(commitment_fact.get("direction") or "user_promised"),
+                confidence=confidence_enum,
+                provenance={**chunk_prov, "quote": quote},
             )
+            db.add(commitment)
+            db.flush()
+            record_derivation(db, document.id, "commitment", commitment.id, commitment.provenance)
 
         # Entities + relations (knowledge graph)
         resolved: dict[str, object] = {}
@@ -399,16 +456,14 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 continue
             kind = coerce_kind(entity_fact.get("kind") or "topic")
             try:
-                resolved[name.lower()] = knowledge.resolve(
-                    document.user_id, name, kind, provenance=chunk_prov
-                )
+                entity = knowledge.resolve(document.user_id, name, kind, provenance=chunk_prov)
+                resolved[name.lower()] = entity
+                record_derivation(db, document.id, "entity", entity.id, chunk_prov)
             except Exception:
                 logger.exception("entity resolution failed for %r", name)
         for mention_name, entity in resolved.items():
             if mention_name and mention_name.lower() in chunk.text.lower():
-                knowledge.add_mention(
-                    document.user_id, chunk, entity, mention_name, 0.7
-                )
+                knowledge.add_mention(document.user_id, chunk, entity, mention_name, 0.7)
         for relation in extraction.relations:
             subject = resolved.get(str(relation.get("subject") or "").lower())
             object_ = resolved.get(str(relation.get("object") or "").lower())
@@ -418,7 +473,7 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 continue
             if not relation_quote or not quote_in_text(relation_quote, chunk.text):
                 continue
-            knowledge.link_relationship(
+            linked = knowledge.link_relationship(
                 document.user_id,
                 subject,
                 predicate,
@@ -426,6 +481,14 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                 0.7,
                 {**chunk_prov, "quote": relation_quote},
             )
+            if linked is not None:
+                record_derivation(
+                    db,
+                    document.id,
+                    "relationship",
+                    linked.id,
+                    {**chunk_prov, "quote": relation_quote},
+                )
 
     # --- 7. Finalize ---
     document.provenance = {

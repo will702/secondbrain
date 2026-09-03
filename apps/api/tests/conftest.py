@@ -32,7 +32,8 @@ def _test_database():
     import app.models  # noqa: F401 — register mappers
 
     server_engine = sqlalchemy.create_engine(
-        TEST_DB_URL.rsplit("/", 1)[0] + "/postgres", pool_pre_ping=True,
+        TEST_DB_URL.rsplit("/", 1)[0] + "/postgres",
+        pool_pre_ping=True,
         isolation_level="AUTOCOMMIT",
     )
     with server_engine.connect() as conn:

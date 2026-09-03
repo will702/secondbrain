@@ -6,6 +6,7 @@ one transaction, and write action_executions + audit rows (AI_SYSTEM.md, SECURIT
 """
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import TypeVar
 
@@ -27,6 +28,7 @@ class CreateEventPayload(BaseModel):
     ends_at: datetime
     kind: str = "focus"
     reason: str = ""
+    task_id: uuid.UUID | None = None
 
 
 class CreateTaskPayload(BaseModel):
@@ -103,8 +105,15 @@ def decide(
     proposal.decided_at = datetime.now(UTC)
     if decision == "reject":
         proposal.status = ProposalStatus.rejected
-        db.add(AuditLog(user_id=user.id, actor="user", action="proposal.reject",
-                        object_type="proposal", object_id=str(proposal.id)))
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                actor="user",
+                action="proposal.reject",
+                object_type="proposal",
+                object_id=str(proposal.id),
+            )
+        )
         db.commit()
         return proposal
     if decision == "approve":
@@ -115,10 +124,15 @@ def decide(
         proposal.status = ProposalStatus.modified
     else:
         raise ValueError(f"Unknown decision: {decision}")
-    db.add(AuditLog(
-        user_id=user.id, actor="user", action=f"proposal.{decision}",
-        object_type="proposal", object_id=str(proposal.id),
-    ))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            actor="user",
+            action=f"proposal.{decision}",
+            object_type="proposal",
+            object_id=str(proposal.id),
+        )
+    )
     db.commit()
     return execute(db, user, proposal)
 
@@ -139,29 +153,48 @@ def execute(db: OrmSession, user: User, proposal: ActionProposal) -> ActionPropo
                 )
             ).scalar_one_or_none()
             if existing is not None:
+                if payload.task_id and existing.task_id is None:
+                    existing.task_id = payload.task_id
                 result = {"event_id": str(existing.id), "duplicate": True}
             else:
                 event = Event(
-                    user_id=user.id, kind=EventKind(payload.kind), title=payload.title,
-                    starts_at=payload.starts_at, ends_at=payload.ends_at,
-                    timezone=user.timezone, provider="local", editable=True,
+                    user_id=user.id,
+                    kind=EventKind(payload.kind),
+                    title=payload.title,
+                    starts_at=payload.starts_at,
+                    ends_at=payload.ends_at,
+                    timezone=user.timezone,
+                    provider="local",
+                    editable=True,
+                    task_id=payload.task_id,
                     source_proposal_id=proposal.id,
                     provenance={"proposal_id": str(proposal.id), "reason": proposal.reason},
                 )
                 db.add(event)
                 db.flush()
                 result = {"event_id": str(event.id)}
+            if payload.task_id:
+                task = db.get(Task, payload.task_id)
+                if task is not None and task.user_id == user.id:
+                    from app.models.enums import TaskStatus
+
+                    task.status = TaskStatus.scheduled
         elif isinstance(payload, CreateTaskPayload):
             task = Task(
-                user_id=user.id, title=payload.title, description=payload.description,
-                estimated_minutes=payload.estimated_minutes, priority=payload.priority,
+                user_id=user.id,
+                title=payload.title,
+                description=payload.description,
+                estimated_minutes=payload.estimated_minutes,
+                priority=payload.priority,
                 provenance={"proposal_id": str(proposal.id), "reason": proposal.reason},
             )
             db.add(task)
             result = {"task_id": str(task.id)}
         elif isinstance(payload, CreateNotePayload):
             note = Note(
-                user_id=user.id, title=payload.title, content=payload.content,
+                user_id=user.id,
+                title=payload.title,
+                content=payload.content,
                 provenance={"proposal_id": str(proposal.id)},
             )
             db.add(note)
@@ -170,21 +203,36 @@ def execute(db: OrmSession, user: User, proposal: ActionProposal) -> ActionPropo
             raise ValueError("no executor")
         proposal.executed_at = datetime.now(UTC)
         proposal.status = ProposalStatus.executed
-        db.add(ActionExecution(
-            proposal_id=proposal.id, user_id=user.id, status="success", result=result,
-        ))
-        db.add(AuditLog(
-            user_id=user.id, actor=f"agent:{proposal.proposed_by}",
-            action=f"proposal.execute.{proposal.action_type}",
-            object_type="proposal", object_id=str(proposal.id), detail=result,
-        ))
+        db.add(
+            ActionExecution(
+                proposal_id=proposal.id,
+                user_id=user.id,
+                status="success",
+                result=result,
+            )
+        )
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                actor=f"agent:{proposal.proposed_by}",
+                action=f"proposal.execute.{proposal.action_type}",
+                object_type="proposal",
+                object_id=str(proposal.id),
+                detail=result,
+            )
+        )
         db.commit()
     except Exception as exc:
         db.rollback()
         proposal.status = ProposalStatus.failed
-        db.add(ActionExecution(
-            proposal_id=proposal.id, user_id=user.id, status="failed", error=str(exc)[:1000],
-        ))
+        db.add(
+            ActionExecution(
+                proposal_id=proposal.id,
+                user_id=user.id,
+                status="failed",
+                error=str(exc)[:1000],
+            )
+        )
         db.commit()
         logger.exception("proposal execution failed", extra={"user_id": str(user.id)})
     return proposal

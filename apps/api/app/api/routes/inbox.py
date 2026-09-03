@@ -53,9 +53,7 @@ async def upload(
             select(Document).where(Document.user_id == user.id, Document.sha256 == sha256)
         ).scalar_one_or_none()
         if existing is not None:
-            results.append(
-                UploadResult(document_id=existing.id, filename=filename, duplicate=True)
-            )
+            results.append(UploadResult(document_id=existing.id, filename=filename, duplicate=True))
             continue
 
         document = Document(

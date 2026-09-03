@@ -40,14 +40,14 @@ class LocalAIEmbedProvider(EmbeddingProvider):
 
     def __init__(self, base_url: str | None = None, timeout: float = 120.0):
         self.settings = get_settings()
-        self.base_url = (base_url or self.settings.embedding_base_url
-                         or self.settings.llm_base_url).rstrip("/")
+        self.base_url = (
+            base_url or self.settings.embedding_base_url or self.settings.llm_base_url
+        ).rstrip("/")
         self.timeout = timeout
         self.name = "local-ai:Qwen3-Embedding-0.6B"
 
     def _embed(self, payload: dict) -> list[list[float]]:
-        response = httpx.post(f"{self.base_url}/embeddings", json=payload,
-                              timeout=self.timeout)
+        response = httpx.post(f"{self.base_url}/embeddings", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()["data"]
         vectors = [item["embedding"] for item in sorted(data, key=lambda d: d["index"])]
@@ -109,8 +109,7 @@ def _build_provider() -> EmbeddingProvider:
         return FastEmbedProvider()
     if choice == "localai":
         return LocalAIEmbedProvider()
-    raise ValueError(f"unknown EMBEDDING_PROVIDER {choice!r} "
-                     "(localai | fastembed | fake)")
+    raise ValueError(f"unknown EMBEDDING_PROVIDER {choice!r} (localai | fastembed | fake)")
 
 
 def get_embedder() -> EmbeddingProvider:
@@ -118,8 +117,9 @@ def get_embedder() -> EmbeddingProvider:
     with _provider_lock:
         if _provider is None:
             _provider = _build_provider()
-            logger.info("embeddings ready via %s (%d-d)",
-                        _provider.name, get_settings().embedding_dim)
+            logger.info(
+                "embeddings ready via %s (%d-d)", _provider.name, get_settings().embedding_dim
+            )
         return _provider
 
 

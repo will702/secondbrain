@@ -22,6 +22,7 @@ def make_planner() -> Planner:
 
 # ----------------------------------------------------------------- planner unit tests
 
+
 def test_merge_intervals():
     merged = merge_intervals(
         [
@@ -37,13 +38,19 @@ def test_merge_intervals():
 def test_exam_prep_spreads_before_deadline():
     """Exam Friday → preparation staged across Mon–Thu, not crammed Thursday night."""
     exam_event = Event(
-        user_id=None, kind=EventKind.deadline, title="Midterm",
-        starts_at=FRIDAY.replace(hour=13), ends_at=FRIDAY.replace(hour=15),
+        user_id=None,
+        kind=EventKind.deadline,
+        title="Midterm",
+        starts_at=FRIDAY.replace(hour=13),
+        ends_at=FRIDAY.replace(hour=15),
         timezone=TZ,
     )
     prep = PlannerTask(
-        id="prep", title="Midterm preparation", priority=1,
-        estimated_minutes=8 * 60, minimum_session_minutes=60,
+        id="prep",
+        title="Midterm preparation",
+        priority=1,
+        estimated_minutes=8 * 60,
+        minimum_session_minutes=60,
         deadline=FRIDAY.replace(hour=13),
     )
     plan = make_planner().plan([prep], [exam_event], now=MONDAY.replace(hour=8))
@@ -58,16 +65,20 @@ def test_exam_prep_spreads_before_deadline():
 
 def test_hard_events_never_overlapped():
     busy_event = Event(
-        user_id=None, kind=EventKind.hard, title="Team meeting",
-        starts_at=MONDAY.replace(hour=10), ends_at=MONDAY.replace(hour=12), timezone=TZ,
+        user_id=None,
+        kind=EventKind.hard,
+        title="Team meeting",
+        starts_at=MONDAY.replace(hour=10),
+        ends_at=MONDAY.replace(hour=12),
+        timezone=TZ,
     )
     task = PlannerTask(id="t1", title="Task", estimated_minutes=120, minimum_session_minutes=60)
     plan = make_planner().plan([task], [busy_event], now=MONDAY.replace(hour=8))
     busy = Interval(MONDAY.replace(hour=10), MONDAY.replace(hour=12))
     for session in plan.sessions:
-        assert not (
-            session.start < busy.end and busy.start < session.end
-        ), f"session {session.start}–{session.end} overlaps the hard event"
+        assert not (session.start < busy.end and busy.start < session.end), (
+            f"session {session.start}–{session.end} overlaps the hard event"
+        )
 
 
 def test_min_session_length_respected():
@@ -79,9 +90,14 @@ def test_min_session_length_respected():
 
 
 def test_dependency_ordering():
-    base = PlannerTask(id="base", title="Research", estimated_minutes=60, minimum_session_minutes=60)
+    base = PlannerTask(
+        id="base", title="Research", estimated_minutes=60, minimum_session_minutes=60
+    )
     dependent = PlannerTask(
-        id="later", title="Write-up", estimated_minutes=60, minimum_session_minutes=60,
+        id="later",
+        title="Write-up",
+        estimated_minutes=60,
+        minimum_session_minutes=60,
         depends_on=["base"],
     )
     plan = make_planner().plan([dependent, base], [], now=MONDAY.replace(hour=8))
@@ -92,13 +108,20 @@ def test_dependency_ordering():
 
 def test_infeasible_when_deadline_too_close():
     task = PlannerTask(
-        id="doomed", title="Big task", estimated_minutes=10 * 60,
-        minimum_session_minutes=60, deadline=MONDAY.replace(hour=13),
+        id="doomed",
+        title="Big task",
+        estimated_minutes=10 * 60,
+        minimum_session_minutes=60,
+        deadline=MONDAY.replace(hour=13),
     )
     # Work day already half full.
     busy = Event(
-        user_id=None, kind=EventKind.hard, title="Class",
-        starts_at=MONDAY.replace(hour=9), ends_at=MONDAY.replace(hour=12), timezone=TZ,
+        user_id=None,
+        kind=EventKind.hard,
+        title="Class",
+        starts_at=MONDAY.replace(hour=9),
+        ends_at=MONDAY.replace(hour=12),
+        timezone=TZ,
     )
     plan = make_planner().plan([task], [busy], now=MONDAY.replace(hour=8))
     assert "doomed" in plan.infeasible
@@ -107,7 +130,10 @@ def test_infeasible_when_deadline_too_close():
 
 def test_preferred_time_of_day():
     task = PlannerTask(
-        id="night", title="Study", estimated_minutes=60, minimum_session_minutes=60,
+        id="night",
+        title="Study",
+        estimated_minutes=60,
+        minimum_session_minutes=60,
         preferred_time_of_day="evening",
     )
     plan = make_planner().plan([task], [], now=MONDAY.replace(hour=8))
@@ -117,8 +143,7 @@ def test_preferred_time_of_day():
 
 def test_focus_cap_per_day():
     tasks = [
-        PlannerTask(id=f"t{i}", title=f"T{i}", estimated_minutes=4 * 60,
-                    minimum_session_minutes=60)
+        PlannerTask(id=f"t{i}", title=f"T{i}", estimated_minutes=4 * 60, minimum_session_minutes=60)
         for i in range(3)
     ]
     plan = make_planner().plan(tasks, [], now=MONDAY.replace(hour=8))
@@ -130,6 +155,7 @@ def test_focus_cap_per_day():
 
 
 # ----------------------------------------------------------------- API integration
+
 
 @pytest.fixture
 def cal_client(db, fake_embeddings):
@@ -143,8 +169,11 @@ def cal_client(db, fake_embeddings):
 
 def _create_task(db, user, title, minutes=120, priority=3) -> Task:
     task = Task(
-        user_id=user.id, title=title, estimated_minutes=minutes,
-        minimum_session_minutes=60, priority=priority,
+        user_id=user.id,
+        title=title,
+        estimated_minutes=minutes,
+        minimum_session_minutes=60,
+        priority=priority,
     )
     db.add(task)
     db.commit()
@@ -201,7 +230,10 @@ def test_missed_session_reschedules_without_touching_hard(cal_client, db):
     after = [e for e in cal_client.get("/calendar").json() if e["kind"] == "focus"]
     # All 240 minutes still planned across the remaining sessions (or more).
     total_after = sum(
-        (datetime.fromisoformat(e["ends_at"]) - datetime.fromisoformat(e["starts_at"])).total_seconds() / 60
+        (
+            datetime.fromisoformat(e["ends_at"]) - datetime.fromisoformat(e["starts_at"])
+        ).total_seconds()
+        / 60
         for e in after
     )
     assert total_after >= 240
@@ -273,8 +305,9 @@ def test_event_overlap_conflict_detected(cal_client):
 
 def test_sessions_use_remaining_time_today():
     """A free block that started before `now` is clipped, not skipped."""
-    task = PlannerTask(id="t", title="Evening work", estimated_minutes=60,
-                       minimum_session_minutes=60)
+    task = PlannerTask(
+        id="t", title="Evening work", estimated_minutes=60, minimum_session_minutes=60
+    )
     plan = make_planner().plan([task], [], now=MONDAY.replace(hour=14))  # mid-afternoon
     session = next(s for s in plan.sessions if s.task_id == "t")
     assert session.start.date() == MONDAY.date()  # today, not pushed to tomorrow

@@ -32,23 +32,23 @@ def create_event(db: OrmSession, user: User, **kwargs) -> Event:
     return event
 
 
-def detect_overlap(db: OrmSession, user: User, starts_at: datetime, ends_at: datetime) -> Event | None:
-    return (
-        db.execute(
-            sa.select(Event)
-            .where(
-                Event.user_id == user.id,
-                Event.kind.in_([EventKind.hard, EventKind.deadline]),
-                Event.starts_at < ends_at,
-                Event.ends_at > starts_at,
-            )
-            .limit(1)
+def detect_overlap(
+    db: OrmSession, user: User, starts_at: datetime, ends_at: datetime
+) -> Event | None:
+    return db.execute(
+        sa.select(Event)
+        .where(
+            Event.user_id == user.id,
+            Event.kind.in_([EventKind.hard, EventKind.deadline]),
+            Event.starts_at < ends_at,
+            Event.ends_at > starts_at,
         )
-        .scalar_one_or_none()
-    )
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------- ics import
+
 
 def import_ics(db: OrmSession, user: User, ics_text: str) -> dict:
     from icalendar import Calendar
@@ -137,18 +137,27 @@ def google_status(db: OrmSession, user: User) -> dict:
 
     settings = get_settings()
     if not (settings.google_client_id and settings.google_client_secret):
-        return {"configured": False, "connected": False,
-                "detail": "Set GOOGLE_CLIENT_ID/SECRET in .env to enable Google Calendar"}
+        return {
+            "configured": False,
+            "connected": False,
+            "detail": "Set GOOGLE_CLIENT_ID/SECRET in .env to enable Google Calendar",
+        }
     integration = db.execute(
         sa.select(Integration).where(
             Integration.user_id == user.id, Integration.provider == "google_calendar"
         )
     ).scalar_one_or_none()
     if integration is None or integration.status != "connected":
-        return {"configured": True, "connected": False,
-                "detail": "Not connected — visit /auth/google/connect"}
-    return {"configured": True, "connected": True,
-            "detail": f"Last synced: {integration.last_synced_at}"}
+        return {
+            "configured": True,
+            "connected": False,
+            "detail": "Not connected — visit /auth/google/connect",
+        }
+    return {
+        "configured": True,
+        "connected": True,
+        "detail": f"Last synced: {integration.last_synced_at}",
+    }
 
 
 def google_authorization_url(state: str) -> str | None:
@@ -198,9 +207,7 @@ def google_exchange_and_store(db: OrmSession, user: User, code: str) -> Integrat
         )
     ).scalar_one_or_none()
     if integration is None:
-        integration = Integration(
-            user_id=user.id, provider="google_calendar", scopes=GOOGLE_SCOPES
-        )
+        integration = Integration(user_id=user.id, provider="google_calendar", scopes=GOOGLE_SCOPES)
         db.add(integration)
     integration.encrypted_credentials = encrypt_json(tokens)
     integration.status = "connected"
@@ -276,7 +283,11 @@ def google_sync(db: OrmSession, user: User, window_days: int = 30) -> dict:
             )
         ).scalar_one_or_none()
         if existing is not None:
-            existing.starts_at, existing.ends_at, existing.title = start, end, item.get("summary", "")
+            existing.starts_at, existing.ends_at, existing.title = (
+                start,
+                end,
+                item.get("summary", ""),
+            )
         else:
             db.add(
                 Event(

@@ -37,6 +37,15 @@ class Storage:
     def open(self, path: Path) -> bytes:
         return Path(path).read_bytes()
 
+    def delete(self, user_id: uuid.UUID, sha256: str) -> None:
+        path = self._path_for(user_id, sha256)
+        path.unlink(missing_ok=True)
+        for directory in (path.parent, path.parent.parent):
+            try:
+                directory.rmdir()
+            except OSError:
+                break
+
     def delete_user(self, user_id: uuid.UUID) -> None:
         user_dir = self.root / str(user_id)
         if user_dir.exists():

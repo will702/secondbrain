@@ -76,12 +76,25 @@ def create_calendar_event(
             f"Overlaps existing hard event '{overlap.title}' ({overlap.starts_at}–{overlap.ends_at})",
         )
     event = create_event(
-        db, user, kind=body.kind, title=body.title, starts_at=body.starts_at,
-        ends_at=body.ends_at, location=body.location, description=body.description,
+        db,
+        user,
+        kind=body.kind,
+        title=body.title,
+        starts_at=body.starts_at,
+        ends_at=body.ends_at,
+        location=body.location,
+        description=body.description,
         provider="local",
     )
-    db.add(AuditLog(user_id=user.id, actor="user", action="event.create",
-                    object_type="event", object_id=str(event.id)))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            actor="user",
+            action="event.create",
+            object_type="event",
+            object_id=str(event.id),
+        )
+    )
     db.commit()
     return event
 
@@ -102,8 +115,15 @@ def delete_event(
         )
     was_focus = event.kind == "focus"
     db.delete(event)
-    db.add(AuditLog(user_id=user.id, actor="user", action="event.delete",
-                    object_type="event", object_id=str(event_id)))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            actor="user",
+            action="event.delete",
+            object_type="event",
+            object_id=str(event_id),
+        )
+    )
     db.commit()
     if was_focus:
         reschedule_after_missed(db, user, event)
@@ -134,9 +154,7 @@ def export_ics_route(
 
 
 @router.get("/calendar/google/status")
-def google_status_route(
-    user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)
-):
+def google_status_route(user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)):
     return google_status(db, user)
 
 
@@ -168,16 +186,21 @@ def google_callback(
     if state != str(user.id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "state mismatch")
     google_exchange_and_store(db, user, code)
-    db.add(AuditLog(user_id=user.id, actor="user", action="integration.connect",
-                    object_type="integration", object_id="google_calendar"))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            actor="user",
+            action="integration.connect",
+            object_type="integration",
+            object_id="google_calendar",
+        )
+    )
     db.commit()
     return {"detail": "Google Calendar connected. You can now sync."}
 
 
 @router.post("/calendar/google/sync")
-def google_sync_route(
-    user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)
-):
+def google_sync_route(user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)):
     status_report = google_status(db, user)
     if not status_report["connected"]:
         raise HTTPException(status.HTTP_409_CONFLICT, status_report["detail"])
@@ -185,9 +208,7 @@ def google_sync_route(
 
 
 @router.post("/schedule/recompute")
-def schedule_recompute(
-    user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)
-):
+def schedule_recompute(user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)):
     # Explicit request, but calendar writes still respect autonomy: below level 2
     # the plan comes back as proposals to approve (permission architecture, SECURITY.md §3).
     return recompute_plan(db, user, apply=user.autonomy_level >= 2)
@@ -202,6 +223,13 @@ def schedule_missed(
     event = db.get(Event, event_id)
     if event is None or event.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
-    db.add(AuditLog(user_id=user.id, actor="user", action="schedule.session_missed",
-                    object_type="event", object_id=str(event_id)))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            actor="user",
+            action="schedule.session_missed",
+            object_type="event",
+            object_id=str(event_id),
+        )
+    )
     return reschedule_after_missed(db, user, event)

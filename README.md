@@ -1,81 +1,69 @@
-# Second Brain OS
+# Second Brain
 
-An agentic personal operating system: drop information in, and the system understands it,
-organizes it, detects tasks/deadlines/commitments, plans your calendar around them, and
-answers questions about your life — with provenance for every AI-derived fact.
-
-```
-CAPTURE → UNDERSTAND → ORGANIZE → CONNECT → PRIORITIZE → PLAN → PREPARE → ACT → REFLECT → LEARN
-```
+A private, single-owner workspace that turns notes and documents into connected tasks, deadlines, calendar proposals, and evidence-backed answers.
 
 ## Stack
 
-| Layer     | Technology                                                        |
-|-----------|-------------------------------------------------------------------|
-| Frontend  | Next.js 15 (App Router), TypeScript, Tailwind CSS                 |
-| Backend   | Python 3.12, FastAPI, SQLAlchemy 2, Alembic                       |
-| Database  | PostgreSQL 16 + pgvector                                          |
-| AI        | local-ai stack (~/ai): Qwen3.5-4B `fast` / Qwen3.5-9B `smart` |
-| Embeddings| Qwen3-Embedding-0.6B (1024-dim) + Qwen3-Reranker-0.6B via local-ai |
-| Jobs      | Postgres-backed durable queue (`FOR UPDATE SKIP LOCKED`)         |
-| Files     | Local filesystem behind an S3-compatible storage adapter         |
+- Next.js 16, React 19, TypeScript, and Tailwind CSS 4
+- Python 3.12, FastAPI, SQLAlchemy 2, and Alembic
+- PostgreSQL 16 with pgvector
+- A local or OpenAI-compatible model endpoint for extraction, embeddings, and reranking
+- A PostgreSQL-backed worker queue and local content-addressed file storage
 
-## Repository layout
+## Start everything
 
-```
-docs/        Product spec, architecture, data model, AI system, security, plan
-apps/api/    FastAPI service + workers (ingestion, extraction, scheduling)
-apps/web/    Next.js frontend (Home / Inbox / Calendar / Brain / Ask)
-data/        Local file storage (gitignored)
-```
-
-## Quick start
-
-1. **Database** — `docker compose up -d` (Postgres 16 + pgvector)
-2. **API** — `cd apps/api && uv sync && uv run alembic upgrade head && uv run uvicorn app.main:app --reload`
-3. **Workers** — `make workers` (background ingestion/extraction/planning)
-4. **Web** — `cd apps/web && pnpm install && pnpm dev` → http://localhost:3000
-5. **AI** — the [local-ai stack](../ai/README.md) at `~/ai` provides the LLM
-   (`fast`/`smart` aliases), 1024-d embeddings, and reranking behind one
-   OpenAI-compatible endpoint on `127.0.0.1:8080`:
-   ```sh
-   local-ai status        # auto-starts on first use; no LaunchAgents
-   local-ai doctor        # verifies models, embeddings, reranker end-to-end
-   ```
-   Any OpenAI-compatible endpoint still works — point `LLM_BASE_URL` at it.
-   Extraction sends `chat_template_kwargs: {enable_thinking: false}` and tight
-   `max_tokens` caps; without those, thinking-mode models stall the sequential
-   local server for minutes per call. Retrieval embeddings/reranking use the
-   same server (`EMBEDDING_PROVIDER=localai`, 1024-d); `fastembed` (384-d)
-   remains available as a fallback provider.
-6. **Sample data** — `cd apps/api && uv run python scripts/seed.py` (demo user +
-   syllabus/assignment/schedule corpus), then sign in at the web app or browse
-   http://localhost:8000/docs for the full API.
-
-See `docs/IMPLEMENTATION_PLAN.md` for the full roadmap and `docs/ARCHITECTURE.md` for the system design.
-
-## Principles
-
-- Documents and emails are **data, never instructions** (prompt-injection hardened and tested).
-- Deterministic software for deterministic problems; LLMs only where semantic understanding pays.
-- Every AI-created fact carries **provenance** (source document, page, confidence).
-- Nothing consequential happens without an **approvable, auditable action proposal**.
-
-## Implementation status (MVP complete)
-
-All six milestones built and verified: 87 backend tests, 14/14 eval cases (incl. live 9B-model
-extraction), full loop demoed live — upload → extraction (deadlines/tasks/commitments/entities
-with provenance) → knowledge graph → hybrid search + ASK with citations → deterministic
-planner → proposals → approval → focus events on the calendar → daily briefing.
-
-What works today: auth, universal inbox (8 formats + zip), parsing/chunking/local embeddings,
-LLM extraction with quote-verification and injection quarantine, deterministic temporal
-normalization + conflict detection, review queue, knowledge graph, hybrid retrieval,
-command bar, local calendar + .ics + creds-optional Google adapter, constraint scheduler with
-rescheduling, attention engine + briefing + readiness, permission levels 0–4, action
-proposals with audit log. Phase 2+ (Gmail, study UI, autonomy workflows) per
-`docs/IMPLEMENTATION_PLAN.md`.
+Install Docker, Python 3.12 with `uv`, Node.js, and `pnpm`, then copy `.env.example` to `.env` and run either command from the repository root:
 
 ```sh
-make test   # 87 tests      make eval   # eval suite (needs live LLM)
+make dev
+# or
+pnpm dev
 ```
+
+The root command starts PostgreSQL, applies migrations, starts the API and workers, then runs the web app at [http://localhost:3000](http://localhost:3000). Running `pnpm dev` inside `apps/web` starts only Next.js.
+
+Individual services remain available through `make db`, `make api`, `make workers`, and `make web`.
+
+## Demo data
+
+```sh
+cd apps/api
+uv run python scripts/seed.py
+```
+
+Sign in with:
+
+```text
+Email: demo@secondbrain.dev
+Password: demo-password-1
+```
+
+## OCR
+
+Digital PDFs are parsed directly. Textless scanned pages use the largest encoded page images and Tesseract OCR. OCR is optional until a scanned PDF is uploaded.
+
+On macOS:
+
+```sh
+brew install tesseract
+```
+
+English is the default language. Install an additional Homebrew language package only when those documents require it:
+
+```sh
+brew install tesseract-lang
+```
+
+If Tesseract is missing or times out, the document is marked failed with a clear error; ordinary text PDFs bypass OCR.
+
+## Verify
+
+```sh
+cd apps/api && uv run pytest -q
+cd apps/api && uv run ruff check app tests
+cd apps/web && pnpm lint
+cd apps/web && pnpm build
+git diff --check
+```
+
+Architecture and product notes live in [`docs/`](docs/). Local `.env` files and stored data are excluded from Git.

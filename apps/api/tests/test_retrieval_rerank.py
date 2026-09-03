@@ -4,7 +4,6 @@ live behaviour is covered by evals (make eval).
 """
 
 import uuid
-from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -39,9 +38,14 @@ def test_localai_provider_documents_and_query_mode(monkeypatch):
     def responder(url, payload):
         assert url.endswith("/v1/embeddings")
         n = len(payload["input"])
-        return _json_response(url, {"data": [
-            {"object": "embedding", "index": i, "embedding": [0.01] * dim}
-            for i in range(n)]})
+        return _json_response(
+            url,
+            {
+                "data": [
+                    {"object": "embedding", "index": i, "embedding": [0.01] * dim} for i in range(n)
+                ]
+            },
+        )
 
     calls = _patch_post(monkeypatch, responder)
     provider = LocalAIEmbedProvider(base_url="http://localtest/v1")
@@ -57,8 +61,9 @@ def test_localai_provider_documents_and_query_mode(monkeypatch):
 
 def test_localai_provider_dim_guard(monkeypatch):
     def responder(url, payload):
-        return _json_response(url, {"data": [
-            {"object": "embedding", "index": 0, "embedding": [0.1, 0.2, 0.3]}]})
+        return _json_response(
+            url, {"data": [{"object": "embedding", "index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+        )
 
     _patch_post(monkeypatch, responder)
     provider = LocalAIEmbedProvider(base_url="http://localtest/v1")
@@ -77,6 +82,7 @@ def test_fake_provider_dim_follows_settings():
 def test_reranker_disabled_returns_none(monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     from app.core.config import get_settings
+
     get_settings.cache_clear()
     try:
         assert reranker_mod.rerank("q", ["a"]) is None
@@ -105,10 +111,15 @@ def test_reranker_maps_scores_by_index(monkeypatch):
 
     def responder(url, payload):
         assert url.endswith("/v1/rerank")
-        return _json_response(url, {"results": [
-            {"index": 1, "relevance_score": 0.01},
-            {"index": 0, "relevance_score": 0.9},
-        ]})
+        return _json_response(
+            url,
+            {
+                "results": [
+                    {"index": 1, "relevance_score": 0.01},
+                    {"index": 0, "relevance_score": 0.9},
+                ]
+            },
+        )
 
     _patch_post(monkeypatch, responder)
     reranker_mod.reset_breaker()
@@ -126,22 +137,36 @@ def three_chunks(db):
     user = User(email="rerank-test@example.com", password_hash="x", display_name="T")
     db.add(user)
     db.flush()
-    doc = Document(user_id=user.id, sha256="0" * 64, original_filename="syl.pdf",
-                   storage_path="data/syl.pdf", mime_type="application/pdf",
-                   title="Syllabus", status=DocumentStatus.processed)
+    doc = Document(
+        user_id=user.id,
+        sha256="0" * 64,
+        original_filename="syl.pdf",
+        storage_path="data/syl.pdf",
+        mime_type="application/pdf",
+        title="Syllabus",
+        status=DocumentStatus.processed,
+    )
     db.add(doc)
     db.flush()
     embedder = FakeEmbedProvider()
-    for index, (section, text) in enumerate((
-        ("filler", "Zebras graze on the savannah among unrelated topics."),
-        ("logistics", "Course logistics: rooms, offices, and email policies."),
-        ("hit", "The final exam is on December 12 at 09:00 in Hall B."),
-    )):
-        db.add(DocumentChunk(
-            user_id=user.id, document_id=doc.id, text=text, section=section,
-            chunk_index=index, token_count=len(text) // 4,
-            embedding=embedder.embed_texts([text])[0],
-        ))
+    for index, (section, text) in enumerate(
+        (
+            ("filler", "Zebras graze on the savannah among unrelated topics."),
+            ("logistics", "Course logistics: rooms, offices, and email policies."),
+            ("hit", "The final exam is on December 12 at 09:00 in Hall B."),
+        )
+    ):
+        db.add(
+            DocumentChunk(
+                user_id=user.id,
+                document_id=doc.id,
+                text=text,
+                section=section,
+                chunk_index=index,
+                token_count=len(text) // 4,
+                embedding=embedder.embed_texts([text])[0],
+            )
+        )
     db.commit()
     return db, user.id
 
