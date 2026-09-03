@@ -31,3 +31,4 @@ data/
 
 # Generated API client (regenerated from FastAPI OpenAPI)
 apps/web/src/lib/api/generated/
+.zcode/

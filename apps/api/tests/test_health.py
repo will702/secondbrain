@@ -27,4 +27,4 @@ def test_config_loads_defaults():
 
     settings = Settings()
     assert settings.database_url
-    assert settings.embedding_dim == 384
+    assert settings.embedding_dim == 1024  # local-ai Qwen3-Embedding

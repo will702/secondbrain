@@ -71,7 +71,7 @@ def test_upload_then_ingest_processes_document(db):
         from app.models import DocumentChunk
 
         row = db.query(DocumentChunk).filter_by(document_id=document_id).first()
-        assert row.embedding is not None and len(row.embedding) == 384
+        assert row.embedding is not None and len(row.embedding) == 1024
 
 
 def test_duplicate_upload_is_noop(db):

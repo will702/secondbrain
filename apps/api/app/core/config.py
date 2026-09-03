@@ -45,9 +45,18 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 300.0
     llm_max_retries: int = 2
 
-    # --- Embeddings (fastembed, local) ---
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
-    embedding_dim: int = 384
+    # --- Embeddings (local-ai stack: Qwen3-Embedding-0.6B, 1024-d) ---
+    # provider: localai (~/ai stack API) | fastembed (ONNX fallback) | fake (tests)
+    embedding_provider: str = "localai"
+    # Defaults to the local-ai server co-located with the LLM endpoint.
+    embedding_base_url: str | None = None
+    embedding_model: str = "Qwen/Qwen3-Embedding-0.6B"
+    embedding_dim: int = 1024
+
+    # --- Retrieval reranking (local-ai stack: Qwen3-Reranker-0.6B) ---
+    reranker_enabled: bool = True
+    reranker_base_url: str | None = None
+    rerank_candidates: int = 20
 
     # --- Sessions / auth ---
     session_ttl_days: int = 30

@@ -2,8 +2,11 @@ import os
 
 # Hermetic tests: point the LLM at an unroutable port unless a test explicitly
 # overrides it. Without this, a locally running MLX/Ollama server would make
-# unit tests do real (slow) model calls.
+# unit tests do real (slow) model calls. Embeddings/reranker follow the same
+# rule: deterministic fake vectors, rerank disabled.
 os.environ.setdefault("LLM_BASE_URL", "http://127.0.0.1:9/v1")
+os.environ.setdefault("EMBEDDING_PROVIDER", "fake")
+os.environ.setdefault("RERANKER_ENABLED", "false")
 
 import pytest
 import sqlalchemy

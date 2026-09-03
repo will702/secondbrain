@@ -33,7 +33,7 @@ ModelRouter.purpose_model = {
   "reasoning":    LLM_REASONING_MODEL,     # planning rationales, ASK synthesis
   "classify":     LLM_CLASSIFY_MODEL,      # doc kind, intent routing (cheapest)
   "summarize":    LLM_SUMMARIZE_MODEL,
-  "embed":        "bge-small-en-v1.5",     # fastembed, in-process, never leaves machine
+  "embed":        "Qwen3-Embedding-0.6B",  # 1024-d via local-ai stack; fastembed fallback
 }
 ```
 
