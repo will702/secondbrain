@@ -10,12 +10,14 @@ from app.models import (
     ActionProposal,
     Commitment,
     Deadline,
+    Document,
     Entity,
     EntityRelationship,
     Event,
     ReviewItem,
     Task,
 )
+from app.models.enums import DocumentStatus
 from app.services.extraction import injection
 from app.services.extraction.verify import quote_in_text
 
@@ -241,18 +243,28 @@ def test_injection_never_becomes_action(extraction_client, db):
     text = open("tests/fixtures/ml_syllabus.md").read() + f"\n\n{INJECTION_TEXT}\n"
     _ingest_syllabus(db, extraction_client, text=text)
 
-    # 1. The injection was detected and flagged for review.
+    # 1. The injection was detected and the document quarantined for review.
     flags = injection.detect_injection(INJECTION_TEXT)
     assert flags, "detector must flag the payload"
     reviews = db.query(ReviewItem).filter_by(kind="injection").all()
     assert len(reviews) == 1
+    assert "quarantined" in reviews[0].question
 
-    # 2. Zero side effects: no proposals, no events, no emails — only inert rows.
-    assert db.query(ActionProposal).count() == 0
+    # 2. Quarantine means NOTHING from the flagged document entered the system:
+    # no tasks (so the planner never even sees injected "work"), no events,
+    # no proposals referencing it.
+    assert db.query(Task).count() == 0
     assert db.query(Event).count() == 0
+    for proposal in db.query(ActionProposal).all():
+        blob = str(proposal.payload) + proposal.reason
+        assert "attacker" not in blob
 
-    # 3. The worst case is an inert task row — data, not behavior.
-    assert db.query(Task).filter(Task.title.contains("attacker")).count() <= 1
+    # 3. The document itself is still stored and processed — as data.
+    document = db.query(Document).filter_by(
+        original_filename="ml_syllabus.md"
+    ).one()  # only one upload in this test
+    assert document.status == DocumentStatus.processed
+    assert document.provenance.get("quarantined") is True
 
 
 def test_review_resolution_flow(extraction_client, db):

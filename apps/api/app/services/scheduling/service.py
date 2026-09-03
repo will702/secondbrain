@@ -106,21 +106,43 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
     plan = planner.plan(planner_tasks, hard_events, now=datetime.now(UTC), horizon_days=horizon_days)
 
     if not apply and user.autonomy_level < 2:
-        # Assistant level (1) may not write calendar events — record the computed
-        # plan as a decision and let the user apply it from the Calendar surface.
+        # Assistant level (1) may not write calendar events — the computed plan
+        # becomes one proposal per session; approving applies it.
+        from app.services.proposals.service import propose
+
+        created_proposals = 0
+        for session in plan.sessions[:20]:
+            propose(
+                db, user, "create_event",
+                {
+                    "title": f"Focus: {session.title}",
+                    "starts_at": session.start.isoformat(),
+                    "ends_at": session.end.isoformat(),
+                    "kind": "focus",
+                },
+                reason=f"Planner suggestion ({session.start.strftime('%a %H:%M')}): part of the computed plan for this task",
+                proposed_by="planning",
+                evidence={"task_id": session.task_id},
+            )
+            created_proposals += 1
         db.add(
             AIDecision(
                 user_id=user.id,
                 agent="planning",
-                decision=f"Plan computed ({len(plan.sessions)} sessions) but not applied",
-                reason="autonomy level < 2: calendar writes require explicit user action",
-                evidence={"sessions": len(plan.sessions), "infeasible": plan.infeasible},
+                decision=f"Plan computed ({len(plan.sessions)} sessions) — proposed for approval",
+                reason="autonomy level < 2: calendar writes require user approval",
+                evidence={
+                    "sessions": len(plan.sessions),
+                    "proposals_created": created_proposals,
+                    "infeasible": plan.infeasible,
+                },
             )
         )
         db.commit()
         return {
             "sessions": 0,
             "tasks_planned": len({s.task_id for s in plan.sessions}),
+            "proposals": created_proposals,
             "infeasible": plan.infeasible,
             "decisions": plan.decisions,
             "applied": False,
@@ -151,7 +173,8 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
 
 def reschedule_after_missed(db: OrmSession, user: User, event: Event) -> dict:
     """A focus session was missed/deleted: drop remaining future sessions of the
-    same task (the planner rebuilds the whole task) and recompute."""
+    same task (the planner rebuilds the whole task) and recompute. This is an
+    explicit user action, so the rebuilt plan applies directly."""
     if event.kind != EventKind.focus or not event.task_id:
         return {"detail": "not a focus session"}
     future = db.execute(
@@ -165,4 +188,4 @@ def reschedule_after_missed(db: OrmSession, user: User, event: Event) -> dict:
     for session in future:
         db.delete(session)
     db.commit()
-    return recompute_plan(db, user)
+    return recompute_plan(db, user, apply=True)

@@ -153,6 +153,8 @@ def _create_task(db, user, title, minutes=120, priority=3) -> Task:
 
 def test_recompute_creates_focus_events_and_decisions(cal_client, db):
     user = db.query(User).filter_by(email="cal@test.dev").one()
+    user.autonomy_level = 2  # Planner: recompute may write focus blocks directly
+    db.commit()
     _create_task(db, user, "Write report", minutes=180, priority=2)
 
     response = cal_client.post("/schedule/recompute")
@@ -172,6 +174,8 @@ def test_recompute_creates_focus_events_and_decisions(cal_client, db):
 
 def test_missed_session_reschedules_without_touching_hard(cal_client, db):
     user = db.query(User).filter_by(email="cal@test.dev").one()
+    user.autonomy_level = 2  # Planner
+    db.commit()
     _create_task(db, user, "Prepare demo", minutes=240, priority=1)
     # A hard event Thursday evening.
     hard = cal_client.post(

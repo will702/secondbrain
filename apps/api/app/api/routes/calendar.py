@@ -188,7 +188,9 @@ def google_sync_route(
 def schedule_recompute(
     user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)
 ):
-    return recompute_plan(db, user)
+    # Explicit request, but calendar writes still respect autonomy: below level 2
+    # the plan comes back as proposals to approve (permission architecture, SECURITY.md §3).
+    return recompute_plan(db, user, apply=user.autonomy_level >= 2)
 
 
 @router.post("/schedule/missed/{event_id}")

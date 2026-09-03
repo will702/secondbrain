@@ -192,6 +192,30 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
     document.importance = profile.importance
     db.commit()
 
+    # --- 2b. Injection quarantine (SECURITY.md §9.3) ---
+    # A flagged document's facts never enter the knowledge base or planner
+    # directly: they are quarantined for human review. Analysis continues only
+    # after the user resolves the review item.
+    if injection_flags:
+        _review(
+            db, document.user_id, "injection",
+            "This document contains instruction-like content attempting to steer the AI "
+            "(possible prompt injection). It was treated strictly as data and quarantined: "
+            "no deadlines, tasks, or entities were created from it. Review?",
+            {"flags": injection_flags, "document_id": str(document.id)},
+            provenance_for(document),
+        )
+        document.provenance = {
+            "extraction_done": True,
+            "quarantined": True,
+            "prompt_versions": PROMPT_VERSIONS,
+            "injection_flags": injection_flags,
+        }
+        document.status = DocumentStatus.processed
+        document.processed_at = datetime.now(UTC)
+        db.commit()
+        return document
+
     # --- 3. Project inference (courses/competitions become projects) ---
     project = None
     if document.doc_kind in (
@@ -350,17 +374,8 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
     document.provenance = {
         "extraction_done": True,
         "prompt_versions": PROMPT_VERSIONS,
-        "injection_flags": injection_flags,
         "review_items_created": review_count,
     }
-    if injection_flags:
-        _review(
-            db, document.user_id, "injection",
-            "This document contains instruction-like content attempting to steer the AI "
-            "(possible prompt injection). It was treated strictly as data. Review?",
-            {"flags": injection_flags, "document_id": str(document.id)},
-            provenance_for(document),
-        )
     document.status = DocumentStatus.processed
     document.processed_at = datetime.now(UTC)
     db.commit()
