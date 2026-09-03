@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import ask, auth, documents, health, inbox, knowledge
+from app.api.routes import ask, auth, calendar, documents, health, inbox, knowledge
 from app.core.config import get_settings
 from app.core.logging import configure_logging, new_request_id
 
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(knowledge.router)
     app.include_router(ask.router)
+    app.include_router(calendar.router)
     return app
 
 
