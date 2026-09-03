@@ -12,7 +12,7 @@ Confidence policy:
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta, timezone as dt_timezone
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from dateutil import parser as dateutil_parser
@@ -236,4 +236,4 @@ def _has_month(lowered: str) -> bool:
 
 
 def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=dt_timezone.utc)
+    return datetime.now(UTC).replace(tzinfo=UTC)

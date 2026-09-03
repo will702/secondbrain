@@ -52,16 +52,25 @@ def enqueue(
 
 
 def claim_next(db: OrmSession) -> Job | None:
+    ready = (
+        sa.select(Job.id)
+        .where(
+            sa.or_(
+                sa.and_(Job.status == JobStatus.pending, Job.run_at <= datetime.now(UTC)),
+                # Recover jobs orphaned by a crashed/killed worker.
+                sa.and_(
+                    Job.status == JobStatus.claimed,
+                    Job.claimed_at < datetime.now(UTC) - timedelta(minutes=10),
+                ),
+            )
+        )
+        .order_by(Job.run_at)
+        .limit(1)
+        .scalar_subquery()
+    )
     statement = (
         sa.update(Job)
-        .where(
-            Job.id
-            == sa.select(Job.id)
-            .where(Job.status == JobStatus.pending, Job.run_at <= datetime.now(UTC))
-            .order_by(Job.run_at)
-            .limit(1)
-            .scalar_subquery()
-        )
+        .where(Job.id == ready)
         .values(status=JobStatus.claimed, claimed_at=datetime.now(UTC), attempts=Job.attempts + 1)
         .returning(Job)
     )

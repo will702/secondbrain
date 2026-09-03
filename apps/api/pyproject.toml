@@ -39,7 +39,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+# E501: long lines allowed (readability over wrapping)
+# B008: FastAPI's `Depends(...)` in argument defaults is the framework idiom
+ignore = ["E501", "B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

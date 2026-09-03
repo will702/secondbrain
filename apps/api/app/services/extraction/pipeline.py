@@ -84,6 +84,19 @@ def _extract_chunk(db, router, document, chunk) -> ChunkExtraction:
 
 
 def _review(db, user_id, kind: str, question: str, payload: dict, provenance: dict) -> None:
+    # Dedupe: one open review item per kind+question (Week N spam guard).
+    existing = (
+        db.query(ReviewItem)
+        .filter(
+            ReviewItem.user_id == user_id,
+            ReviewItem.kind == kind,
+            ReviewItem.status == "open",
+            ReviewItem.question == question,
+        )
+        .first()
+    )
+    if existing is not None:
+        return
     db.add(
         ReviewItem(
             user_id=user_id, kind=kind, question=question, payload=payload, provenance=provenance
@@ -91,11 +104,32 @@ def _review(db, user_id, kind: str, question: str, payload: dict, provenance: di
     )
 
 
-def _title_tokens(title: str) -> set[str]:
+_MONTH_WORDS = {
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+}
+
+
+def _title_tokens(title: str) -> tuple[set[str], set[str]]:
+    """Returns (word tokens, numeric tokens). Month names are dropped so two
+    date-expressions like 'October 20' vs 'October 13' don't look like the
+    same item; numbers are kept separate to distinguish Assignment 4 vs 3."""
     from app.services.knowledge.resolution import normalize_name
 
-    stop = {"the", "a", "an", "of", "for", "to", "and", "in", "on", "due", "deadline", "submit"}
-    return {t for t in normalize_name(title).split() if t not in stop}
+    stop = {"the", "a", "an", "of", "for", "to", "and", "in", "on", "due", "deadline",
+            "submit", "week"}
+    words: set[str] = set()
+    numbers: set[str] = set()
+    for token in normalize_name(title).split():
+        if token in stop or token in _MONTH_WORDS:
+            continue
+        if token.isdigit():
+            if len(token) == 4 and token.startswith(("19", "20")):
+                continue  # years are not distinguishing
+            numbers.add(token)
+        else:
+            words.add(token)
+    return words, numbers
 
 
 def _detect_deadline_conflicts(db, deadline: Deadline, provenance: dict) -> None:
@@ -115,14 +149,17 @@ def _detect_deadline_conflicts(db, deadline: Deadline, provenance: dict) -> None
         )
         .all()
     )
-    tokens = _title_tokens(deadline.title)
+    tokens, numbers = _title_tokens(deadline.title)
     if not tokens:
-        return
+        return  # pure date expressions never conflict-match by title
     for other in candidates:
-        other_tokens = _title_tokens(other.title)
+        other_tokens, other_numbers = _title_tokens(other.title)
         overlap = tokens & other_tokens
-        # Majority of the smaller title must match to consider them the same item.
+        # Majority of the smaller title's words must match, and distinguishing
+        # numbers must be consistent ("Assignment 4" ≠ "Assignment 3").
         if not overlap or len(overlap) < max(1, min(len(tokens), len(other_tokens))) * 0.5:
+            continue
+        if numbers and other_numbers and numbers != other_numbers:
             continue
         delta = abs((other.normalized_at - deadline.normalized_at).total_seconds())
         if delta > 24 * 3600:
@@ -251,20 +288,35 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
 
         # Dates → deterministic normalization → deadlines
         for date_fact in extraction.dates:
-            if not quote_in_text(date_fact.get("quote", ""), chunk.text):
+            quote = str(date_fact.get("quote") or "")
+            when_text = str(date_fact.get("when_text") or "")
+            if not quote or not when_text or not quote_in_text(quote, chunk.text):
+                continue
+            title = str(date_fact.get("title") or "") or when_text
+            # Dedupe across chunks/documents: same item + same raw expression
+            # extracted again is the same fact, not a new one.
+            duplicate = (
+                db.query(Deadline)
+                .filter(
+                    Deadline.user_id == document.user_id,
+                    Deadline.title == title[:300],
+                    Deadline.raw_expression == when_text[:500],
+                )
+                .first()
+            )
+            if duplicate is not None:
                 continue
             normalized = normalize_when(
-                date_fact.get("when_text", ""),
+                when_text,
                 reference=document.created_at,
                 tz_name=user_timezone,
             )
-            title = date_fact.get("title") or date_fact.get("when_text", "deadline")
             deadline = Deadline(
                 user_id=document.user_id,
                 title=title[:300],
                 normalized_at=normalized.normalized_at,
                 date_is_exact=normalized.date_is_exact,
-                raw_expression=date_fact.get("when_text", date_fact["quote"])[:500],
+                raw_expression=when_text[:500],
                 timezone=user_timezone,
                 confidence=normalized.confidence,
                 explicit=normalized.explicit,
@@ -274,7 +326,7 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                     else DeadlineStatus.tentative
                 ),
                 project_id=project.id if project else None,
-                provenance={**chunk_prov, "quote": date_fact["quote"]},
+                provenance={**chunk_prov, "quote": quote},
             )
             db.add(deadline)
             db.flush()
@@ -301,24 +353,27 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
             else:
                 _detect_deadline_conflicts(db, deadline, chunk_prov)
 
-        # Tasks
+        # Tasks (title falls back to the quote — models sometimes omit it)
         for task_fact in extraction.tasks:
-            if not quote_in_text(task_fact.get("quote", ""), chunk.text):
+            quote = str(task_fact.get("quote") or "")
+            if not quote or not quote_in_text(quote, chunk.text):
                 continue
+            title = str(task_fact.get("title") or "").strip() or quote.strip()[:120]
             task = Task(
                 user_id=document.user_id,
-                title=task_fact["title"][:300],
-                description=task_fact.get("quote", "")[:1000],
+                title=title[:300],
+                description=quote[:1000],
                 project_id=project.id if project else None,
                 estimated_minutes=task_fact.get("estimated_minutes"),
-                provenance={**chunk_prov, "quote": task_fact["quote"]},
+                provenance={**chunk_prov, "quote": quote},
                 confidence=0.6,
             )
             db.add(task)
 
         # Commitments
         for commitment_fact in extraction.commitments:
-            if not quote_in_text(commitment_fact.get("quote", ""), chunk.text):
+            quote = str(commitment_fact.get("quote") or "")
+            if not quote or not quote_in_text(quote, chunk.text):
                 continue
             level = commitment_fact.get("confidence", "possible")
             confidence_enum = (
@@ -329,20 +384,20 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
             db.add(
                 Commitment(
                     user_id=document.user_id,
-                    text=commitment_fact["text"][:1000],
-                    direction=commitment_fact.get("direction", "user_promised"),
+                    text=str(commitment_fact.get("text") or quote)[:1000],
+                    direction=str(commitment_fact.get("direction") or "user_promised"),
                     confidence=confidence_enum,
-                    provenance={**chunk_prov, "quote": commitment_fact["quote"]},
+                    provenance={**chunk_prov, "quote": quote},
                 )
             )
 
         # Entities + relations (knowledge graph)
         resolved: dict[str, object] = {}
         for entity_fact in extraction.entities:
-            name = entity_fact.get("name", "").strip()
+            name = str(entity_fact.get("name") or "").strip()
             if not name:
                 continue
-            kind = coerce_kind(entity_fact.get("kind", "topic"))
+            kind = coerce_kind(entity_fact.get("kind") or "topic")
             try:
                 resolved[name.lower()] = knowledge.resolve(
                     document.user_id, name, kind, provenance=chunk_prov
@@ -355,19 +410,21 @@ def extract_document(db: OrmSession, document: Document, chunks) -> Document:
                     document.user_id, chunk, entity, mention_name, 0.7
                 )
         for relation in extraction.relations:
-            subject = resolved.get(relation.get("subject", "").lower())
-            object_ = resolved.get(relation.get("object", "").lower())
-            if subject is None or object_ is None:
+            subject = resolved.get(str(relation.get("subject") or "").lower())
+            object_ = resolved.get(str(relation.get("object") or "").lower())
+            predicate = str(relation.get("predicate") or "").strip()
+            relation_quote = str(relation.get("quote") or "")
+            if subject is None or object_ is None or not predicate:
                 continue
-            if not quote_in_text(relation.get("quote", ""), chunk.text):
+            if not relation_quote or not quote_in_text(relation_quote, chunk.text):
                 continue
             knowledge.link_relationship(
                 document.user_id,
                 subject,
-                relation["predicate"],
+                predicate,
                 object_,
                 0.7,
-                {**chunk_prov, "quote": relation["quote"]},
+                {**chunk_prov, "quote": relation_quote},
             )
 
     # --- 7. Finalize ---

@@ -91,8 +91,8 @@ SYLLABUS_FACTS = {
 
 
 def _ingest_syllabus(db, client, text: str | None = None):
-    from app.workers.queue import claim_next
     from app.workers.handlers import HANDLERS
+    from app.workers.queue import claim_next
 
     content = text if text is not None else open("tests/fixtures/ml_syllabus.md").read()
     response = client.post(

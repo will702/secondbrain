@@ -27,8 +27,8 @@ def ask_client(db, fake_embeddings):
         )
         # Ingest the syllabus corpus (extraction returns nothing extra — facts
         # for ASK come from the deadline rows we insert below).
-        from tests.test_extraction import SYLLABUS_FACTS, make_responder
         from app.agents.router import ModelRouter
+        from tests.test_extraction import SYLLABUS_FACTS, make_responder
 
         set_router(ModelRouter(FakeLLMClient(make_responder(SYLLABUS_FACTS))))
         _ingest(db, client, "tests/fixtures/ml_syllabus.md")

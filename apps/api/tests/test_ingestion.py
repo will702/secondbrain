@@ -6,9 +6,8 @@ from fastapi.testclient import TestClient
 from app.agents.embeddings import FakeEmbedProvider, set_embedder
 from app.main import app
 from app.models import Document
-from app.models.enums import DocumentStatus
-from app.workers.queue import claim_next
 from app.workers.handlers import HANDLERS
+from app.workers.queue import claim_next
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

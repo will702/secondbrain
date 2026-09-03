@@ -1,13 +1,12 @@
 """Schedule service: DB rows ⇄ planner inputs, plan recomputation, rescheduling."""
 
 import logging
-from datetime import UTC, datetime
-from datetime import time
+from datetime import UTC, datetime, time
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session as OrmSession
 
-from app.models import AIDecision, Deadline, Event, Task, TaskDependency, User
+from app.models import ActionProposal, AIDecision, Deadline, Event, Task, TaskDependency, User
 from app.models.enums import DeadlineStatus, EventKind, TaskStatus
 from app.services.scheduling.planner import (
     Planner,
@@ -107,8 +106,26 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
 
     if not apply and user.autonomy_level < 2:
         # Assistant level (1) may not write calendar events — the computed plan
-        # becomes one proposal per session; approving applies it.
+        # becomes one proposal per session; approving applies it. Previous
+        # pending planner proposals are superseded first (repeated recomputes
+        # must not stack duplicates).
+        from app.models.enums import ProposalStatus
         from app.services.proposals.service import propose
+
+        superseded = 0
+        stale = db.execute(
+            sa.select(ActionProposal).where(
+                ActionProposal.user_id == user.id,
+                ActionProposal.proposed_by == "planning",
+                ActionProposal.status == ProposalStatus.pending,
+            )
+        ).scalars().all()
+        from datetime import UTC as _UTC
+
+        for old in stale:
+            old.status = ProposalStatus.rejected
+            old.decided_at = datetime.now(_UTC)
+            superseded += 1
 
         created_proposals = 0
         for session in plan.sessions[:20]:
@@ -143,6 +160,7 @@ def recompute_plan(db: OrmSession, user: User, horizon_days: int = 14, apply: bo
             "sessions": 0,
             "tasks_planned": len({s.task_id for s in plan.sessions}),
             "proposals": created_proposals,
+            "superseded": superseded,
             "infeasible": plan.infeasible,
             "decisions": plan.decisions,
             "applied": False,

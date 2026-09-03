@@ -1,7 +1,7 @@
 import enum
 
 
-class DocumentKind(str, enum.Enum):
+class DocumentKind(enum.StrEnum):
     syllabus = "syllabus"
     lecture_slides = "lecture_slides"
     assignment = "assignment"
@@ -16,7 +16,7 @@ class DocumentKind(str, enum.Enum):
     other = "other"
 
 
-class DocumentStatus(str, enum.Enum):
+class DocumentStatus(enum.StrEnum):
     received = "received"
     parsing = "parsing"
     embedding = "embedding"
@@ -26,7 +26,7 @@ class DocumentStatus(str, enum.Enum):
     failed = "failed"
 
 
-class EntityKind(str, enum.Enum):
+class EntityKind(enum.StrEnum):
     person = "person"
     course = "course"
     project = "project"
@@ -37,7 +37,7 @@ class EntityKind(str, enum.Enum):
     goal = "goal"
 
 
-class EventKind(str, enum.Enum):
+class EventKind(enum.StrEnum):
     hard = "hard"
     soft = "soft"
     deadline = "deadline"
@@ -45,7 +45,7 @@ class EventKind(str, enum.Enum):
     reminder = "reminder"
 
 
-class TaskStatus(str, enum.Enum):
+class TaskStatus(enum.StrEnum):
     proposed = "proposed"
     pending = "pending"
     scheduled = "scheduled"
@@ -55,26 +55,26 @@ class TaskStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
-class CommitmentConfidence(str, enum.Enum):
+class CommitmentConfidence(enum.StrEnum):
     confirmed = "confirmed"
     likely = "likely"
     possible = "possible"
 
 
-class DeadlineStatus(str, enum.Enum):
+class DeadlineStatus(enum.StrEnum):
     tentative = "tentative"
     confirmed = "confirmed"
     rejected = "rejected"
 
 
-class MemoryLayer(str, enum.Enum):
+class MemoryLayer(enum.StrEnum):
     working = "working"
     episodic = "episodic"
     semantic = "semantic"
     procedural = "procedural"
 
 
-class ProposalStatus(str, enum.Enum):
+class ProposalStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"
     modified = "modified"
@@ -83,13 +83,13 @@ class ProposalStatus(str, enum.Enum):
     failed = "failed"
 
 
-class RiskLevel(str, enum.Enum):
+class RiskLevel(enum.StrEnum):
     low = "low"
     medium = "medium"
     high = "high"
 
 
-class JobStatus(str, enum.Enum):
+class JobStatus(enum.StrEnum):
     pending = "pending"
     claimed = "claimed"
     done = "done"
@@ -97,7 +97,7 @@ class JobStatus(str, enum.Enum):
     dead = "dead"
 
 
-class ReviewStatus(str, enum.Enum):
+class ReviewStatus(enum.StrEnum):
     open = "open"
     resolved = "resolved"
     dismissed = "dismissed"

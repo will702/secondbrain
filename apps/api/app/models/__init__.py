@@ -1,5 +1,6 @@
 from app.models.documents import Document, DocumentChunk
-from app.models.identity import Permission, Session as DbSession, User
+from app.models.identity import Permission, User
+from app.models.identity import Session as DbSession
 from app.models.knowledge import (
     Entity,
     EntityMention,

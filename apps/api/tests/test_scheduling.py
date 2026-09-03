@@ -1,6 +1,6 @@
 """M4: planner constraints, calendar, ics round-trip, rescheduling."""
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -194,7 +194,6 @@ def test_missed_session_reschedules_without_touching_hard(cal_client, db):
 
     focus_events = [e for e in cal_client.get("/calendar").json() if e["kind"] == "focus"]
     missed_id = focus_events[0]["id"]
-    remaining_before = len(focus_events) - 1
 
     result = cal_client.post(f"/schedule/missed/{missed_id}").json()
     assert result["applied"] is True
@@ -270,3 +269,13 @@ def test_event_overlap_conflict_detected(cal_client):
     )
     assert clash.status_code == 409
     assert "Class A" in clash.json()["detail"]
+
+
+def test_sessions_use_remaining_time_today():
+    """A free block that started before `now` is clipped, not skipped."""
+    task = PlannerTask(id="t", title="Evening work", estimated_minutes=60,
+                       minimum_session_minutes=60)
+    plan = make_planner().plan([task], [], now=MONDAY.replace(hour=14))  # mid-afternoon
+    session = next(s for s in plan.sessions if s.task_id == "t")
+    assert session.start.date() == MONDAY.date()  # today, not pushed to tomorrow
+    assert session.start >= MONDAY.replace(hour=14)

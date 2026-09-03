@@ -11,7 +11,8 @@ events — hard events are never created or moved by the planner.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 from app.models import AIDecision, Event
@@ -208,16 +209,19 @@ class Planner:
                     if usable < min(task.minimum_session_minutes, remaining):
                         continue
                     for free in self._free_in(window, busy):
-                        if free.start < earliest:
-                            continue
-                        length = min(usable, free.minutes)
+                        # Clip to `earliest` instead of skipping: a free block
+                        # that started before now still has usable time left.
+                        start = max(free.start, earliest)
+                        length = min(
+                            usable, int((free.end - start).total_seconds() // 60)
+                        )
                         if length < min(task.minimum_session_minutes, remaining):
                             continue
                         session = SessionPlan(
                             task_id=task.id,
                             title=task.title,
-                            start=free.start,
-                            end=free.start + timedelta(minutes=length),
+                            start=start,
+                            end=start + timedelta(minutes=length),
                         )
                         result.sessions.append(session)
                         sessions_for_task += 1

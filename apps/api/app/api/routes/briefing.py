@@ -60,7 +60,7 @@ def decide_proposal(
     try:
         result = proposals_service.decide(db, user, proposal, body.decision, body.modified_payload)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return {
         "id": str(result.id),
         "status": result.status.value,

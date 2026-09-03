@@ -3,7 +3,17 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+
+def _find_repo_root() -> Path:
+    """Walk up from this file to the directory containing docker-compose.yml
+    (the monorepo root — where .env and data/ live)."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "docker-compose.yml").exists():
+            return parent
+    return Path(__file__).resolve().parents[4]
+
+
+REPO_ROOT = _find_repo_root()
 
 
 class Settings(BaseSettings):
@@ -32,7 +42,7 @@ class Settings(BaseSettings):
     llm_reasoning_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
     llm_classify_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
     llm_summarize_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_timeout_seconds: float = 120.0
+    llm_timeout_seconds: float = 300.0
     llm_max_retries: int = 2
 
     # --- Embeddings (fastembed, local) ---

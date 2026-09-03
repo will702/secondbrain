@@ -10,7 +10,6 @@ from app.core.db import get_db
 from app.core.security import (
     COOKIE_NAME,
     hash_password,
-    hash_token,
     new_session_token,
     session_expiry,
     verify_password,

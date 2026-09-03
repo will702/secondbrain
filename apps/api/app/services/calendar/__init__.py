@@ -106,7 +106,8 @@ def import_ics(db: OrmSession, user: User, ics_text: str) -> dict:
 
 
 def export_ics(db: OrmSession, user: User, start: datetime, end: datetime) -> str:
-    from icalendar import Calendar, Event as IcsEvent
+    from icalendar import Calendar
+    from icalendar import Event as IcsEvent
 
     calendar = Calendar()
     calendar.add("PRODID", "-//Second Brain OS//EN")
@@ -174,7 +175,7 @@ def google_exchange_and_store(db: OrmSession, user: User, code: str) -> Integrat
     import httpx
 
     from app.core.config import get_settings
-    from app.core.crypto import decrypt_json, encrypt_json
+    from app.core.crypto import encrypt_json
 
     settings = get_settings()
     response = httpx.post(

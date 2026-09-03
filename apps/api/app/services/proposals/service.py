@@ -6,7 +6,6 @@ one transaction, and write action_executions + audit rows (AI_SYSTEM.md, SECURIT
 """
 
 import logging
-import uuid
 from datetime import UTC, datetime
 from typing import TypeVar
 
@@ -16,7 +15,6 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.models import ActionExecution, ActionProposal, AuditLog, Event, Note, Task, User
 from app.models.enums import EventKind, ProposalStatus, RiskLevel
-from app.services.policy import check
 
 logger = logging.getLogger("secondbrain.proposals")
 
@@ -131,15 +129,28 @@ def execute(db: OrmSession, user: User, proposal: ActionProposal) -> ActionPropo
     payload = PAYLOAD_SCHEMAS[proposal.action_type].model_validate(proposal.payload)
     try:
         if isinstance(payload, CreateEventPayload):
-            event = Event(
-                user_id=user.id, kind=EventKind(payload.kind), title=payload.title,
-                starts_at=payload.starts_at, ends_at=payload.ends_at,
-                timezone=user.timezone, provider="local", editable=True,
-                source_proposal_id=proposal.id,
-                provenance={"proposal_id": str(proposal.id), "reason": proposal.reason},
-            )
-            db.add(event)
-            result = {"event_id": str(event.id)}
+            # Idempotent execution: approving two identical proposals (or the
+            # same one twice via a race) must not create overlapping events.
+            existing = db.execute(
+                select(Event).where(
+                    Event.user_id == user.id,
+                    Event.title == payload.title,
+                    Event.starts_at == payload.starts_at,
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                result = {"event_id": str(existing.id), "duplicate": True}
+            else:
+                event = Event(
+                    user_id=user.id, kind=EventKind(payload.kind), title=payload.title,
+                    starts_at=payload.starts_at, ends_at=payload.ends_at,
+                    timezone=user.timezone, provider="local", editable=True,
+                    source_proposal_id=proposal.id,
+                    provenance={"proposal_id": str(proposal.id), "reason": proposal.reason},
+                )
+                db.add(event)
+                db.flush()
+                result = {"event_id": str(event.id)}
         elif isinstance(payload, CreateTaskPayload):
             task = Task(
                 user_id=user.id, title=payload.title, description=payload.description,

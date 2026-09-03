@@ -15,7 +15,7 @@ from app.models import (
     Task,
     User,
 )
-from app.models.enums import EventKind, ProposalStatus, TaskStatus
+from app.models.enums import EventKind, ProposalStatus
 from app.services.policy import check
 from app.services.proposals.service import decide, propose
 
@@ -238,3 +238,46 @@ def test_briefing_structure_and_attention(m5_client, db):
     assert readiness[0]["components"]["tasks_completed"] == "0/1"
     assert any("free block" in s["action"] or "Work on" in s["action"]
                for s in briefing["suggestions"])
+
+
+def test_duplicate_event_approval_is_idempotent(m5_client, db):
+    """Approving two identical proposals creates exactly one event."""
+    from datetime import UTC, datetime, timedelta
+
+    user = _user(db)
+    start = datetime.now(UTC) + timedelta(days=2)
+    payload = {
+        "title": "Focus: Same block",
+        "starts_at": start.isoformat(),
+        "ends_at": (start + timedelta(hours=1)).isoformat(),
+        "kind": "focus",
+    }
+    first = propose(db, user, "create_event", payload, reason="r", proposed_by="planning")
+    second = propose(db, user, "create_event", payload, reason="r", proposed_by="planning")
+    decide(db, user, first, "approve")
+    decide(db, user, second, "approve")
+    assert db.query(Event).filter_by(title="Focus: Same block").count() == 1
+    assert second.status == ProposalStatus.executed
+
+
+def test_recompute_supersedes_stale_planner_proposals(m5_client, db):
+    """A second recompute must replace, not stack, pending planner proposals."""
+    user = _user(db)
+    db.add(Task(user_id=user.id, title="One task", estimated_minutes=120,
+                minimum_session_minutes=60))
+    db.commit()
+
+    first = m5_client.post("/schedule/recompute").json()
+    assert first["applied"] is False
+    pending_after_first = len(
+        m5_client.get("/proposals", params={"status_filter": "pending"}).json()
+    )
+    assert pending_after_first >= 1
+
+    second = m5_client.post("/schedule/recompute").json()
+    assert second["superseded"] == pending_after_first
+    pending_after_second = len(
+        m5_client.get("/proposals", params={"status_filter": "pending"}).json()
+    )
+    assert pending_after_second == second["proposals"]
+    assert db.query(Event).filter_by(kind=EventKind.focus).count() == 0

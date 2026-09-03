@@ -77,12 +77,21 @@ class LLMClient:
         schema_model: type[T],
         db=None,
         user_id=None,
+        max_tokens: int | None = None,
     ) -> T:
         """One structured call: tool-forced if possible, fenced-JSON fallback, validate+repair."""
         schema = schema_model.model_json_schema()
+        # Tight caps: structured payloads are small; a generous cap lets a
+        # rambling model stall the (sequential) local server for minutes.
+        if max_tokens is None:
+            max_tokens = 1200 if purpose == "reasoning" else 800
         payload = {
             "model": model,
             "temperature": 0,
+            "max_tokens": max_tokens,
+            # Qwen3-family models emit long <think> blocks unless disabled —
+            # without this, every extraction call takes minutes.
+            "chat_template_kwargs": {"enable_thinking": False},
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -105,7 +114,7 @@ class LLMClient:
 
         messages = payload["messages"]
         last_error: Exception | None = None
-        for attempt in range(self.max_retries + 1):
+        for _attempt in range(self.max_retries + 1):
             try:
                 body = self._post({**payload, "messages": messages})
                 message = body["choices"][0]["message"]

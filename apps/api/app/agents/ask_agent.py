@@ -82,7 +82,6 @@ def _deadline_facts(db: OrmSession, user: User, question: str) -> dict:
 
 
 def _commitment_facts(db: OrmSession, user: User, question: str) -> dict:
-    lowered = question.lower()
     person_name = None
     for match in re.finditer(r"\b(?:to|from|with|made to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)", question):
         person_name = match.group(1)
