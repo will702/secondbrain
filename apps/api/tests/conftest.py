@@ -1,5 +1,10 @@
 import os
 
+# Hermetic tests: point the LLM at an unroutable port unless a test explicitly
+# overrides it. Without this, a locally running MLX/Ollama server would make
+# unit tests do real (slow) model calls.
+os.environ.setdefault("LLM_BASE_URL", "http://127.0.0.1:9/v1")
+
 import pytest
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker

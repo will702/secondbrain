@@ -24,6 +24,7 @@ dependencies = [
     "icalendar>=6.0",
     "pyyaml>=6.0",
     "email-validator>=2.0",
+    "python-dateutil>=2.9",
 ]
 
 [dependency-groups]

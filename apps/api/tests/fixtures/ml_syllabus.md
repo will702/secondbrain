@@ -1,7 +1,7 @@
 # Machine Learning CS301 Syllabus
 
 ## Course Information
-Instructor: Professor Sarah Smith. Email: sarah.smith@university.edu.
+Welcome to Machine Learning (CS301). Instructor: Professor Sarah Smith. Email: sarah.smith@university.edu.
 Office hours: Tuesdays 14:00-16:00 in Room 4.219.
 
 ## Assessment
