@@ -78,3 +78,13 @@ def db(_test_database):
     session = _TestSessionLocal()
     yield session
     session.close()
+
+
+@pytest.fixture
+def fake_embeddings():
+    """Deterministic hash embeddings — no model download in tests."""
+    from app.agents.embeddings import FakeEmbedProvider, set_embedder
+
+    set_embedder(FakeEmbedProvider())
+    yield
+    set_embedder(FakeEmbedProvider())
