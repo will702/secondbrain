@@ -1,0 +1,43 @@
+{
+  "": {
+    "dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrain.d",
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrain.o",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/primary.swiftdeps"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/AppState.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/AppState.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/AppState~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/AppState.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/AppState.dia"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/LaunchView.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/LaunchView.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/LaunchView~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/LaunchView.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/LaunchView.dia"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/MainView.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MainView.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MainView~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MainView.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MainView.dia"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/MenuBarContent.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MenuBarContent.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MenuBarContent~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MenuBarContent.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/MenuBarContent.dia"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/SecondBrainApp.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrainApp.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrainApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrainApp.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/SecondBrainApp.dia"
+  },
+  "/Users/willson/secondbrain/apps/desktop/Sources/SecondBrain/Support.swift": {
+    "object": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/Support.swift.o",
+    "swiftmodule": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/Support~partial.swiftmodule",
+    "swift-dependencies": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/Support.swiftdeps",
+    "diagnostics": "/Users/willson/secondbrain/apps/desktop/.build/arm64-apple-macosx/release/SecondBrain.build/Support.dia"
+  }
+}
