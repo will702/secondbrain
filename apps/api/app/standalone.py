@@ -179,6 +179,12 @@ def main() -> int:
         return 0
     finally:
         _emit("shutdown", "started")
+        try:
+            from app.services import ai_stack
+
+            ai_stack.stop_server()
+        except Exception:
+            pass
         if db is not None:
             db.stop()
         _emit("shutdown", "done")

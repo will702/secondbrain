@@ -5,9 +5,10 @@ import SwiftUI
 /// API behind it. External links go to the user's default browser.
 struct MainView: View {
     let url: URL
+    @EnvironmentObject private var state: AppState
 
     var body: some View {
-        WebViewContainer(url: url)
+        WebViewContainer(url: url, pendingPath: $state.pendingPath)
             .ignoresSafeArea(edges: .bottom)
             .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -15,6 +16,7 @@ struct MainView: View {
 
 private struct WebViewContainer: NSViewRepresentable {
     let url: URL
+    @Binding var pendingPath: String?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -29,6 +31,16 @@ private struct WebViewContainer: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        if let path = pendingPath {
+            // Menu-bar action (e.g. "Enable AI…") navigates the live webview.
+            pendingPath = nil
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            components.path = path
+            if let target = components.url {
+                nsView.load(URLRequest(url: target))
+            }
+            return
+        }
         guard let current = nsView.url, current.host == url.host, current.port == url.port else {
             nsView.load(URLRequest(url: url))
             return

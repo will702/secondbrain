@@ -34,6 +34,13 @@ struct MenuBarContent: View {
                 Label("Restart Services", systemImage: "arrow.clockwise")
             }
             Button {
+                state.pendingPath = "/setup"
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.windows.first?.makeKeyAndOrderFront(nil)
+            } label: {
+                Label(state.aiOnline ? "AI Settings" : "Enable AI…", systemImage: "sparkles")
+            }
+            Button {
                 NSWorkspace.shared.open(Paths.logs)
             } label: {
                 Label("Reveal Logs", systemImage: "doc.text.magnifyingglass")

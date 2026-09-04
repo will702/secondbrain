@@ -25,6 +25,7 @@ dependencies = [
     "pyyaml>=6.0",
     "email-validator>=2.0",
     "python-dateutil>=2.9",
+    "huggingface-hub>=1.29.0",
 ]
 
 [dependency-groups]

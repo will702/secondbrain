@@ -43,7 +43,9 @@ final class AppState: ObservableObject {
     ]
     @Published var apiPort: UInt16 = 0
     @Published var aiOnline = false
-    @Published var aiEnabled = false  // models present in ~/Library/.../models
+    @Published var aiSetupAvailable = false
+    /// Path the main webview should navigate to (set by menu-bar actions).
+    @Published var pendingPath: String?
 
     private var backend: Process?
     private var lockFD: Int32?
@@ -118,7 +120,7 @@ final class AppState: ObservableObject {
     private func backendEnvironment(port: UInt16) -> [String: String] {
         // Keep tesseract (OCR) discoverable if the user has Homebrew.
         let path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-        return [
+        var env = [
             "PATH": path,
             "HOME": NSHomeDirectory(),
             "SECONDBRAIN_MANAGE_DB": "1",
@@ -130,6 +132,28 @@ final class AppState: ObservableObject {
             "DATA_DIR": Paths.data.path,
             "LLM_BASE_URL": "http://127.0.0.1:8080/v1",
         ]
+        // Guided AI setup contract — only when the bundle carries the runtime.
+        let fm = FileManager.default
+        let uvBin = Paths.resources.appendingPathComponent("uv/uv")
+        let aiDir = Paths.support.appendingPathComponent("ai")
+        var wheel: URL?
+        var config: URL?
+        if let contents = try? fm.contentsOfDirectory(
+            at: Paths.resources.appendingPathComponent("local-ai"), includingPropertiesForKeys: nil
+        ) {
+            wheel = contents.first { $0.pathExtension == "whl" }
+            config = contents.first { $0.pathExtension == "yaml" || $0.pathExtension == "yml" }
+        }
+        let aiHome = aiDir.appendingPathComponent("home")
+        if fm.isExecutableFile(atPath: uvBin.path), let wheel, let config {
+            env["SECONDBRAIN_AI_DIR"] = aiHome.path
+            env["SECONDBRAIN_UV_BIN"] = uvBin.path
+            env["SECONDBRAIN_LOCALAI_WHEEL"] = wheel.path
+            env["SECONDBRAIN_LOCALAI_CONFIG"] = config.path
+            aiSetupAvailable = true
+            try? fm.createDirectory(at: aiHome, withIntermediateDirectories: true)
+        }
+        return env
     }
 
     private func logHandle(for url: URL, reuse: Bool) -> FileHandle {

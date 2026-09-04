@@ -51,10 +51,11 @@ class Settings(BaseSettings):
     # --- LLM (OpenAI-compatible; default: local MLX server) ---
     llm_base_url: str = "http://localhost:8080/v1"
     llm_api_key: str | None = None
-    llm_extraction_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_reasoning_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_classify_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_summarize_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
+    # Role aliases resolved server-side by the local-ai stack.
+    llm_extraction_model: str = "fast"
+    llm_reasoning_model: str = "smart"
+    llm_classify_model: str = "fast"
+    llm_summarize_model: str = "fast"
     llm_timeout_seconds: float = 300.0
     llm_max_retries: int = 2
 
