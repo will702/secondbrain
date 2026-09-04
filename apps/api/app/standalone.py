@@ -136,7 +136,16 @@ def main() -> int:
         from app.main import app
 
         server = uvicorn.Server(
-            uvicorn.Config(app, host=args.host, port=args.port, access_log=False)
+            # Explicit loop/protocol: the "auto" variants dynamically import
+            # uvloop/httptools, which is fragile inside a frozen bundle.
+            uvicorn.Config(
+                app,
+                host=args.host,
+                port=args.port,
+                access_log=False,
+                loop="asyncio",
+                http="h11",
+            )
         )
 
         stop = threading.Event()
