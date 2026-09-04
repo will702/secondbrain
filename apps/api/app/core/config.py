@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,10 +16,18 @@ def _find_repo_root() -> Path:
 
 REPO_ROOT = _find_repo_root()
 
+# Frozen/packaged mode can't rely on repo-root discovery — let the launcher
+# point us at an explicit env file instead.
+ENV_FILE = (
+    Path(os.environ["SECONDBRAIN_ENV_FILE"]).resolve()
+    if os.environ.get("SECONDBRAIN_ENV_FILE")
+    else (REPO_ROOT / ".env").resolve()
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(REPO_ROOT / ".env").resolve(), env_file_encoding="utf-8", extra="ignore"
+        env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore"
     )
 
     # --- Core ---
@@ -34,6 +43,10 @@ class Settings(BaseSettings):
     # --- Files ---
     data_dir: Path = REPO_ROOT / "data"
     max_upload_mb: int = 50
+
+    # --- Packaged app (standalone runtime) ---
+    # Directory of the static web export to serve at "/" (same-origin UI).
+    web_dist_dir: Path | None = None
 
     # --- LLM (OpenAI-compatible; default: local MLX server) ---
     llm_base_url: str = "http://localhost:8080/v1"
