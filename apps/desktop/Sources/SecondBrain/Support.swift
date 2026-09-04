@@ -4,7 +4,11 @@ import Security
 /// Filesystem layout, per-install secrets, and small process utilities.
 enum Paths {
     /// ~/Library/Application Support/SecondBrain — all user data lives here.
+    /// SECONDBRAIN_APP_SUPPORT overrides for isolated dist-check runs.
     static var support: URL {
+        if let override = ProcessInfo.processInfo.environment["SECONDBRAIN_APP_SUPPORT"] {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
         let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let base = urls.first ?? FileManager.default.homeDirectoryForCurrentUser
         return base.appendingPathComponent("SecondBrain", isDirectory: true)

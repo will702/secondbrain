@@ -214,15 +214,16 @@ def install() -> None:
                 "HF_HUB_DISABLE_TELEMETRY": "1",
                 "DO_NOT_TRACK": "1",
             }
-            subprocess.run(
-                [str(layout["uv"]), "venv", str(layout["ai"] / "venv"), "--python", "3.12"],
-                check=True, capture_output=True, text=True, env=env,
-            )
-            subprocess.run(
-                [str(layout["uv"]), "pip", "install", "--python", str(layout["venv_python"]),
-                 str(layout["wheel"])],
-                check=True, capture_output=True, text=True, env=env,
-            )
+            def run_uv(args: list[str]) -> None:
+                result = subprocess.run(
+                    [str(layout["uv"]), *args], capture_output=True, text=True, env=env
+                )
+                if result.returncode != 0:
+                    tail = (result.stderr or result.stdout or "")[-500:]
+                    raise RuntimeError(f"uv {' '.join(args[:2])} failed: {tail}")
+
+            run_uv(["venv", str(layout["ai"] / "venv"), "--python", "3.12"])
+            run_uv(["pip", "install", "--python", str(layout["venv_python"]), str(layout["wheel"])])
 
         # 2. Models — snapshot_download resumes interrupted files.
         for repo in repos:

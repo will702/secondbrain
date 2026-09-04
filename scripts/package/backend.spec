@@ -29,8 +29,6 @@ a = Analysis(
         "fastembed",
         "onnxruntime",
         "tokenizers",
-        "huggingface_hub",
-        "numpy",
         "pandas",
         "torch",
         # never used at runtime

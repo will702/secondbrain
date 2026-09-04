@@ -56,6 +56,40 @@ brew install tesseract-lang
 
 If Tesseract is missing or times out, the document is marked failed with a clear error; ordinary text PDFs bypass OCR.
 
+## Desktop app (single-entry build for general users)
+
+`make dist` produces `dist/SecondBrain.dmg` — a self-contained macOS
+(Apple Silicon) app that needs **no Docker, Node, Python, or setup**:
+
+- PostgreSQL 16 + pgvector compiled for arm64, embedded and managed per-user
+- The API, background workers, and the static web UI served from one frozen
+  backend process
+- A native SwiftUI shell: staged launch experience, in-app window, menu-bar
+  status, graceful shutdown of every child process
+- All user data in `~/Library/Application Support/SecondBrain/`
+  (database, uploads, logs, per-install secrets)
+
+AI runs as a **guided first-run download**: the app ships small (~85 MB) and
+"Enable AI" downloads the local-ai engine plus ~10 GB of Qwen models with
+resumable progress into the same app-support directory. Without AI, Ask falls
+back to structured facts and uploads wait until AI is enabled.
+
+Distribution targets:
+
+```sh
+make dist        # full pipeline: stage → app → dmg → smoke
+make dist-check  # end-to-end gate on the assembled app (SKIP_AI=1 to skip AI)
+make smoke       # frozen-backend smoke test only
+```
+
+Requirements to build: Xcode command line tools, `uv` on PATH, and the
+local-ai repo (default `~/ai`, override with `LOCAL_AI_REPO`).
+
+The build is currently **unsigned** — users must right-click → Open the first
+time (or copy to /Applications). To sign and notarize, set `SIGN_IDENTITY`
+(Developer ID Application) and `NOTARY_KEYCHAIN_PROFILE` when running
+`make dist-dmg`.
+
 ## Verify
 
 ```sh

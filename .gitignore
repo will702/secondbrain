@@ -36,3 +36,4 @@ apps/web/src/lib/api/generated/
 # packaging build outputs (postgres, frozen backend, web export)
 build/
 dist/
+apps/desktop/.build/
