@@ -251,9 +251,10 @@ def test_pending_suggestions_are_not_piled_up_even_with_different_ideas(db, user
 
 def test_approving_goal_tolerates_existing_duplicates(db, user):
     title = "Finish my priority tasks this week"
-    make_goal(db, user, title=title)
-    make_goal(db, user, title=title)  # e.g. created by hand twice
     p = goals.propose_targets(db, user, router=offline_router())[0]
     assert p.payload["title"] == title
+    # ...then the same goal gets created by hand twice before the suggestion is approved.
+    make_goal(db, user, title=title)
+    make_goal(db, user, title=title)
     decide(db, user, p, "approve")
     assert p.status == ProposalStatus.executed, "must not crash on MultipleResultsFound"
