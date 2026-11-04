@@ -9,6 +9,13 @@ from app.core.security import COOKIE_NAME
 from app.models import DbSession, User
 
 
+def is_instance_owner(db: OrmSession, user: User) -> bool:
+    """PMAX state belongs to the OS user, not to an app account: only the first
+    account (the person who set the instance up) may see or decide file actions."""
+    first = db.execute(select(User.id).order_by(User.created_at, User.id).limit(1)).scalar_one_or_none()
+    return first == user.id
+
+
 def get_current_user(
     request: Request,
     sb_session: str | None = Cookie(default=None, alias=COOKIE_NAME),

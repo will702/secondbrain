@@ -1,4 +1,5 @@
 from app.models.documents import Document, DocumentChunk
+from app.models.goals import Goal, GoalCheckin
 from app.models.identity import Permission, User
 from app.models.identity import Session as DbSession
 from app.models.knowledge import (
@@ -40,6 +41,8 @@ __all__ = [
     "EntityMention",
     "EntityRelationship",
     "Event",
+    "Goal",
+    "GoalCheckin",
     "Integration",
     "Job",
     "Memory",

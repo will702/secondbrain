@@ -14,6 +14,7 @@ DANGER_ACTIONS = {
     "send_email",
     "delete_event_hard",
     "delete_document",
+    "meeting.invite",  # emails other people from the user's account
     "integration.disconnect",
     "permission.change",
     "account.delete",
@@ -21,23 +22,27 @@ DANGER_ACTIONS = {
 
 LEVEL_CAPABILITIES = {
     0: set(),  # Observer: read-only
-    1: {"task.create", "note.create", "review.resolve"},  # Assistant
-    2: {"task.create", "note.create", "review.resolve", "event.write_soft"},  # Planner
+    1: {"task.create", "note.create", "review.resolve", "goal.write"},  # Assistant
+    2: {"task.create", "note.create", "review.resolve", "event.write_soft", "goal.write"},  # Planner
     3: {  # Copilot
         "task.create",
         "note.create",
         "review.resolve",
+        "goal.write",
         "event.write_soft",
         "event.write_hard",
         "email.draft",
+        "shortcut.run",
     },
     4: {  # Autonomous: same as 3 + no per-action confirmation for non-danger actions
         "task.create",
         "note.create",
         "review.resolve",
+        "goal.write",
         "event.write_soft",
         "event.write_hard",
         "email.draft",
+        "shortcut.run",
     },
 }
 

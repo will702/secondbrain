@@ -79,6 +79,19 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str | None = None
+    # Gmail drafts need the restricted gmail.compose scope; off unless you want drafts.
+    google_gmail_drafts: bool = False
+    # --- PMAX file engine (optional; auto-detected on PATH / ~/.local/bin) ---
+    pmax_bin: str | None = None
+
+    # --- Zoom Server-to-Server OAuth (optional) ---
+    zoom_account_id: str | None = None
+    zoom_client_id: str | None = None
+    zoom_client_secret: str | None = None
+
+    # --- Apple apps via osascript (Reminders/Calendar/Mail/Shortcuts); macOS only ---
+    apple_enabled: bool = False
+    apple_calendar_name: str = "Calendar"
     # Exposed on CORS for the web app.
     frontend_origins: list[str] = ["http://localhost:3000"]
 

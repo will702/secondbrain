@@ -130,6 +130,16 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/calendar.events",
 ]
+GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"  # drafts only; never send
+
+
+def google_scopes() -> list[str]:
+    from app.core.config import get_settings
+
+    scopes = list(GOOGLE_SCOPES)
+    if get_settings().google_gmail_drafts:
+        scopes.append(GMAIL_COMPOSE_SCOPE)
+    return scopes
 
 
 def google_status(db: OrmSession, user: User) -> dict:
@@ -172,7 +182,7 @@ def google_authorization_url(state: str) -> str | None:
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,
         "response_type": "code",
-        "scope": " ".join(GOOGLE_SCOPES),
+        "scope": " ".join(google_scopes()),
         "access_type": "offline",
         "prompt": "consent",
         "state": state,
@@ -207,7 +217,7 @@ def google_exchange_and_store(db: OrmSession, user: User, code: str) -> Integrat
         )
     ).scalar_one_or_none()
     if integration is None:
-        integration = Integration(user_id=user.id, provider="google_calendar", scopes=GOOGLE_SCOPES)
+        integration = Integration(user_id=user.id, provider="google_calendar", scopes=google_scopes())
         db.add(integration)
     integration.encrypted_credentials = encrypt_json(tokens)
     integration.status = "connected"

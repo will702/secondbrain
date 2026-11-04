@@ -6,7 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import ai, ask, auth, briefing, calendar, documents, health, inbox, knowledge
+from app.api.routes import (
+    ai,
+    ask,
+    auth,
+    briefing,
+    calendar,
+    documents,
+    goals,
+    health,
+    inbox,
+    knowledge,
+    productivity,
+    system,
+)
 from app.core.config import get_settings
 from app.core.logging import configure_logging, new_request_id
 
@@ -55,6 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(calendar.router)
     app.include_router(briefing.router)
     app.include_router(ai.router)
+    app.include_router(system.router)
+    app.include_router(productivity.router)
+    app.include_router(goals.router)
 
     # Packaged app: serve the static web export at "/" (registered last, so
     # API routes win; every page has its own HTML file in the export).

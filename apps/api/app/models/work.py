@@ -37,6 +37,9 @@ class Task(TimestampMixin, Base):
     provenance: Mapped[dict | None] = mapped_column(JSONB)
     confidence: Mapped[float] = mapped_column(sa.Float, nullable=False, default=0.5)
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    goal_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("goals.id", ondelete="SET NULL"), index=True
+    )
 
 
 class TaskDependency(Base):

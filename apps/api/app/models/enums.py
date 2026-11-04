@@ -101,3 +101,15 @@ class ReviewStatus(enum.StrEnum):
     open = "open"
     resolved = "resolved"
     dismissed = "dismissed"
+
+
+class GoalHorizon(enum.StrEnum):
+    week = "week"
+    month = "month"
+    quarter = "quarter"
+
+
+class GoalStatus(enum.StrEnum):
+    active = "active"
+    achieved = "achieved"
+    dropped = "dropped"

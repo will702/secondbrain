@@ -5,10 +5,12 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, is_instance_owner
 from app.core.db import get_db
 from app.models import AuditLog, User
+from app.services import system_status
 from app.services.briefing.morning import build_briefing
+from app.services.integrations import pmax
 from app.services.proposals import service as proposals_service
 
 router = APIRouter(tags=["briefing"])
@@ -16,7 +18,10 @@ router = APIRouter(tags=["briefing"])
 
 @router.get("/briefing")
 def morning_briefing(user: User = Depends(get_current_user), db: OrmSession = Depends(get_db)):
-    return build_briefing(db, user)
+    briefing = build_briefing(db, user)
+    if is_instance_owner(db, user):  # lets PMAX go easy on busy days
+        pmax.write_load_snapshot(system_status.booked_load(db, user))
+    return briefing
 
 
 class ProposalOut(BaseModel):
@@ -83,6 +88,9 @@ def approve_batch(
         proposal = db.get(proposals_service.ActionProposal, proposal_id)
         if proposal is None or proposal.user_id != user.id:
             results.append({"id": str(proposal_id), "status": "not_found"})
+            continue
+        if proposal.action_type in proposals_service.INDIVIDUAL_ONLY:
+            results.append({"id": str(proposal_id), "status": "needs_individual_decision"})
             continue
         try:
             decided = proposals_service.decide(db, user, proposal, "approve")
