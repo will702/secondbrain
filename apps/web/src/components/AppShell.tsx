@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import {
   BrainIcon,
@@ -26,6 +26,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [showAiBanner, setShowAiBanner] = useState(false);
+
+  // Surface AI setup only when the guided installer exists and hasn't run.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ available: boolean; phase: string; server_online: boolean }>("/ai/status")
+      .then((s) => {
+        if (cancelled) return;
+        setShowAiBanner(s.available && !s.server_online && s.phase !== "installing");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const logout = async () => {
     try {
@@ -103,6 +119,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </header>
+      {showAiBanner && pathname !== "/setup" && (
+        <div className="border-b border-amber-200/70 bg-amber-50/90">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+            <p className="text-[11px] text-amber-900">
+              AI features (document understanding, Ask) need a one-time local download.
+            </p>
+            <Link
+              href="/setup"
+              className="shrink-0 rounded-full bg-stone-900 px-3 py-1 text-[11px] font-medium text-white transition-transform hover:bg-stone-800 active:scale-[0.97] motion-reduce:transition-none"
+            >
+              Enable AI
+            </Link>
+          </div>
+        </div>
+      )}
       <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         {children}
       </main>

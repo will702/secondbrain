@@ -7,6 +7,14 @@ import os
 os.environ.setdefault("LLM_BASE_URL", "http://127.0.0.1:9/v1")
 os.environ.setdefault("EMBEDDING_PROVIDER", "fake")
 os.environ.setdefault("RERANKER_ENABLED", "false")
+# Never let tests read or write the real PMAX state (also stops pmax from initialising it).
+os.environ.setdefault("PMAX_STATE", "/nonexistent/pmax-state")
+# Assign (not setdefault): a developer's .env or shell must never let tests reach real
+# Reminders/Calendar/Mail, Zoom or Gmail.
+os.environ["APPLE_ENABLED"] = "false"
+for _k in ("ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"):
+    os.environ[_k] = ""
+os.environ["GOOGLE_GMAIL_DRAFTS"] = "false"
 
 import pytest
 import sqlalchemy
@@ -45,7 +53,12 @@ def _test_database():
     server_engine.dispose()
 
     _engine = sqlalchemy.create_engine(TEST_DB_URL, pool_pre_ping=True)
+    # A reused secondbrain_test would lack newly added columns (e.g. tasks.goal_id) because
+    # create_all never alters existing tables: start from an empty schema every session.
+    assert _engine.url.database.endswith("_test"), "refusing to reset a non-test database"
     with _engine.begin() as conn:
+        conn.execute(sqlalchemy.text("DROP SCHEMA public CASCADE"))
+        conn.execute(sqlalchemy.text("CREATE SCHEMA public"))
         conn.execute(sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(_engine)
     _TestSessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)

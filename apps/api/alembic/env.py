@@ -8,7 +8,8 @@ from app.core.db import Base
 import app.models  # noqa: F401 — registers all mappers on Base.metadata
 
 config = context.config
-if config.config_file_name is not None:
+# Standalone runtime keeps its own logging (stderr); skip the ini reconfigure.
+if config.config_file_name is not None and not config.attributes.get("skip_logging_config"):
     fileConfig(config.config_file_name)
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

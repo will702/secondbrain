@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,10 +16,18 @@ def _find_repo_root() -> Path:
 
 REPO_ROOT = _find_repo_root()
 
+# Frozen/packaged mode can't rely on repo-root discovery — let the launcher
+# point us at an explicit env file instead.
+ENV_FILE = (
+    Path(os.environ["SECONDBRAIN_ENV_FILE"]).resolve()
+    if os.environ.get("SECONDBRAIN_ENV_FILE")
+    else (REPO_ROOT / ".env").resolve()
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(REPO_ROOT / ".env").resolve(), env_file_encoding="utf-8", extra="ignore"
+        env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore"
     )
 
     # --- Core ---
@@ -35,13 +44,18 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     max_upload_mb: int = 50
 
+    # --- Packaged app (standalone runtime) ---
+    # Directory of the static web export to serve at "/" (same-origin UI).
+    web_dist_dir: Path | None = None
+
     # --- LLM (OpenAI-compatible; default: local MLX server) ---
     llm_base_url: str = "http://localhost:8080/v1"
     llm_api_key: str | None = None
-    llm_extraction_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_reasoning_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_classify_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
-    llm_summarize_model: str = "keXjos/Qwen3.8-9B-mlx-4Bit"
+    # Role aliases resolved server-side by the local-ai stack.
+    llm_extraction_model: str = "fast"
+    llm_reasoning_model: str = "smart"
+    llm_classify_model: str = "fast"
+    llm_summarize_model: str = "fast"
     llm_timeout_seconds: float = 300.0
     llm_max_retries: int = 2
 
@@ -65,6 +79,19 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str | None = None
+    # Gmail drafts need the restricted gmail.compose scope; off unless you want drafts.
+    google_gmail_drafts: bool = False
+    # --- PMAX file engine (optional; auto-detected on PATH / ~/.local/bin) ---
+    pmax_bin: str | None = None
+
+    # --- Zoom Server-to-Server OAuth (optional) ---
+    zoom_account_id: str | None = None
+    zoom_client_id: str | None = None
+    zoom_client_secret: str | None = None
+
+    # --- Apple apps via osascript (Reminders/Calendar/Mail/Shortcuts); macOS only ---
+    apple_enabled: bool = False
+    apple_calendar_name: str = "Calendar"
     # Exposed on CORS for the web app.
     frontend_origins: list[str] = ["http://localhost:3000"]
 

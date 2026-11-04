@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.models import Deadline, Event, ReviewItem, Task, User
 from app.models.enums import DeadlineStatus, EventKind, TaskStatus
+from app.services.goals.service import ambition_summary
 
 # Attention weights: urgency dominates, but importance and risk matter.
 W_URGENCY = 0.5
@@ -237,6 +238,9 @@ def build_briefing(db: OrmSession, user: User) -> dict:
         "suggestions": suggestions,
         "upcoming": upcoming,
         "readiness": [readiness_for(deadline, tasks, now) for deadline in deadlines[:5]],
+        "ambition": ambition_summary(
+            db, user, tasks, scored, _free_minutes_before(db, user, day_end)
+        ),
     }
 
 

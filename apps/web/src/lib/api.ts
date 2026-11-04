@@ -1,7 +1,9 @@
 "use client";
 
 // Thin typed API client. All requests carry the session cookie (credentials).
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Production builds are served same-origin by the API; dev talks to :8000.
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
